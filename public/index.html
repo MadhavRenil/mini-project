@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voyagr — AI Travel Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Google Maps loaded by app.js when GOOGLE_MAPS_API_KEY is set -->
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="logo">Voyag</a>
+      <nav class="nav">
+        <a href="#" data-page="plan" class="nav-link">Plan Trip</a>
+        <a href="#" data-page="history" class="nav-link">My Trips</a>
+        <a href="#" data-page="preferences" class="nav-link">Preferences</a>
+        <a href="#" id="navSettings" class="nav-link">Settings</a>
+        <span class="user-badge" id="userBadge"></span>
+        <button type="button" class="btn btn-ghost" id="btnLogout" hidden>Log out</button>
+        <a href="/login" class="nav-link" id="navLogin">Log in</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Landing / Home (Replaced with User's Design) -->
+    <section id="page-landing" class="page active">
+      <section class="hero-new">
+        <h1>Plan Your Perfect Trip</h1>
+        <div class="search-box">
+          <input type="text" id="heroSearchInput" placeholder="Where to?">
+          <button id="heroSearchBtn">Search</button>
+        </div>
+      </section>
+
+      <section class="trip-section">
+        <h2>Recommended Trips</h2>
+        <div class="trip-container">
+          <!-- Converted from PHP loop -->
+          <div class="trip-card">
+            <img src="https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=80" alt="Dubai skyline">
+            <div class="trip-info">
+              <h3>Dubai Adventure</h3>
+              <p>5 Days</p>
+              <span>₹45,000</span>
+            </div>
+          </div>
+          <div class="trip-card">
+            <img src="https://images.unsplash.com/photo-1431274172761-fca41d930114?auto=format&fit=crop&w=1200&q=80" alt="Paris Eiffel Tower">
+            <div class="trip-info">
+              <h3>Paris Getaway</h3>
+              <p>4 Days</p>
+              <span>₹75,000</span>
+            </div>
+          </div>
+          <div class="trip-card">
+            <img src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=80" alt="Bali temple and landscape">
+            <div class="trip-info">
+              <h3>Bali Escape</h3>
+              <p>6 Days</p>
+              <span>₹60,000</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div style="text-align:center; margin-top:1.2rem;">
+        <p class="text-muted">Continue without an account</p>
+        <button class="btn btn-ghost" onclick="document.querySelector('[data-page=plan]').click()">Start Planning</button>
+      </div>
+    </section>
+
+    <!-- Plan Trip – Step-by-step wizard -->
+    <section id="page-plan" class="page">
+      <div class="container">
+        <h2>Plan Your Trip</h2>
+        <div class="wizard-steps">
+          <div class="wizard-step active" data-step="1">1. Where & when</div>
+          <div class="wizard-step" data-step="2">2. How to travel</div>
+          <div class="wizard-step" data-step="3">3. Where to stay</div>
+          <div class="wizard-step" data-step="4">4. Style & budget</div>
+        </div>
+
+        <!-- Step 1: Where & When -->
+        <div id="wizardStep1" class="wizard-panel card active">
+          <h3>Where are you going?</h3>
+          <p class="form-error hidden" id="wizardStep1Error"></p>
+          <div class="form-row">
+            <label>Source</label>
+            <input type="text" id="planSource" name="source" placeholder="City or airport" required>
+            <p class="field-hint">Tip: start typing city names for recommendations.</p>
+          </div>
+          <div class="form-row">
+            <label>Destination</label>
+            <input type="text" id="planDestination" name="destination" placeholder="City or airport" required>
+            <p class="field-hint">City-level search gives best transport and stay matches.</p>
+          </div>
+          <div class="form-row two-cols">
+            <div>
+              <label>Travel date</label>
+              <input type="date" id="planTravelDate" name="travel_date" required>
+            </div>
+            <div>
+              <label>Number of travelers</label>
+              <input type="number" id="planNumTravelers" name="num_travelers" min="1" value="1" required>
+              <p class="field-hint">Pricing is calculated for all travelers.</p>
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary" id="wizardNext1">Next →</button>
+        </div>
+
+        <!-- Step 2: Transport (Flight / Train / Bus / Car) -->
+        <div id="wizardStep2" class="wizard-panel card">
+          <h3>How do you want to travel?</h3>
+          <p class="wizard-hint">Choose one or more. We'll show real-time flight prices when available.</p>
+          <p class="form-error hidden" id="wizardStep2Error"></p>
+          <div class="choice-cards" id="transportChoices">
+            <label class="choice-card">
+              <input type="checkbox" name="transport" value="flight" checked>
+              <span class="choice-icon">✈</span>
+              <span class="choice-label">Flight</span>
+            </label>
+            <label class="choice-card">
+              <input type="checkbox" name="transport" value="train">
+              <span class="choice-icon">🚂</span>
+              <span class="choice-label">Train</span>
+            </label>
+            <label class="choice-card">
+              <input type="checkbox" name="transport" value="bus">
+              <span class="choice-icon">🚌</span>
+              <span class="choice-label">Bus</span>
+            </label>
+            <label class="choice-card">
+              <input type="checkbox" name="transport" value="car">
+              <span class="choice-icon">🚗</span>
+              <span class="choice-label">Car</span>
+            </label>
+          </div>
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-ghost" id="wizardBack2">← Back</button>
+            <button type="button" class="btn btn-primary" id="wizardNext2">Next →</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Hotel / Stay type -->
+        <div id="wizardStep3" class="wizard-panel card">
+          <h3>Where do you want to stay?</h3>
+          <div class="choice-cards" id="hotelChoices">
+            <label class="choice-card">
+              <input type="radio" name="hotel_type" value="budget">
+              <span class="choice-label">Budget hotel</span>
+              <span class="choice-meta">Affordable, clean</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="hotel_type" value="midrange" checked>
+              <span class="choice-label">Mid-range hotel</span>
+              <span class="choice-meta">Comfort, good value</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="hotel_type" value="luxury">
+              <span class="choice-label">Luxury hotel</span>
+              <span class="choice-meta">Premium stay</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="hotel_type" value="hostel">
+              <span class="choice-label">Hostel</span>
+              <span class="choice-meta">Social, budget</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="hotel_type" value="apartment">
+              <span class="choice-label">Apartment</span>
+              <span class="choice-meta">Space, kitchen</span>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Nights at destination</label>
+            <input type="number" id="planHotelNights" name="hotel_nights" min="1" max="30" value="2">
+          </div>
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-ghost" id="wizardBack3">← Back</button>
+            <button type="button" class="btn btn-primary" id="wizardNext3">Next →</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Style & Budget -->
+        <div id="wizardStep4" class="wizard-panel card">
+          <h3>Trip style & budget</h3>
+          <div class="form-row">
+            <label>Trip style</label>
+            <select id="planPreference" name="preference_type">
+              <option value="">— Any —</option>
+              <option value="adventure">Adventure</option>
+              <option value="luxury">Luxury</option>
+              <option value="family">Family</option>
+              <option value="solo">Solo</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Budget (₹) – optional</label>
+            <input type="number" id="planBudget" name="budget" min="0" step="100" placeholder="e.g. 15000">
+            <p class="field-hint">Leave empty to see all price ranges.</p>
+          </div>
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-ghost" id="wizardBack4">← Back</button>
+            <button type="button" class="btn btn-primary" id="wizardSubmit">Get prices & options</button>
+          </div>
+        </div>
+
+        <div id="planResults" class="results-section hidden">
+          <p id="realTimeBadge" class="real-time-badge hidden">✓ Real-time prices (Skyscanner)</p>
+          <h3>Your options</h3>
+          <div id="optionsList" class="options-list"></div>
+          <div id="realTimeFlightsSection" class="real-time-section hidden">
+            <h3>✈ Real-time flight options</h3>
+            <div id="realTimeFlightsList" class="flights-list"></div>
+          </div>
+          <div id="realTimeHotelsSection" class="real-time-section hidden">
+            <h3>🏨 Real-time hotel prices at destination</h3>
+            <div id="realTimeHotelsList" class="hotels-list"></div>
+          </div>
+          <div id="fuelCostSection" class="real-time-section hidden">
+            <h3>⛽ Fuel cost (real-time petrol price)</h3>
+            <div id="fuelCostDetails" class="fuel-cost-card card"></div>
+          </div>
+          <div class="map-section">
+            <h3>Route map</h3>
+            <div id="map" class="map-container"></div>
+          </div>
+          <div id="destinationEvents" class="events-section">
+            <h3>Events at destination</h3>
+            <div id="eventsList" class="events-list"></div>
+          </div>
+          <div id="itinerarySection" class="real-time-section hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+              <h3>📅 Day-by-Day Itinerary</h3>
+              <button class="btn btn-sm btn-outline" id="btnRecalculateItinerary">Regenerate</button>
+            </div>
+            <div id="itineraryTimeline" class="itinerary-timeline"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Itinerary Modal -->
+    <div id="itineraryModal" class="modal hidden">
+      <div class="modal-content card">
+        <h3>Customize Itinerary</h3>
+        <p>Select your interests to generate a personalized plan.</p>
+        <form id="formItinerary">
+          <div class="checkbox-group">
+            <label><input type="checkbox" name="interest" value="culture" checked> Culture & History</label>
+            <label><input type="checkbox" name="interest" value="food" checked> Food & Dining</label>
+            <label><input type="checkbox" name="interest" value="adventure"> Adventure & Nature</label>
+            <label><input type="checkbox" name="interest" value="shopping"> Shopping</label>
+          </div>
+          <div class="form-row" style="margin-top:1rem;">
+            <label>Days to plan</label>
+            <input type="number" name="days" value="3" min="1" max="7">
+          </div>
+          <div class="modal-actions" style="margin-top:1.5rem; display:flex; justify-content:flex-end; gap:0.5rem;">
+            <button type="button" class="btn btn-ghost" id="closeItinerary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Generate Plan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Review & Payment flow (shown in same page after selecting option) -->
+    <section id="page-review" class="page">
+      <div class="container">
+        <h2>Review your trip</h2>
+        <div id="reviewSummary" class="card review-summary"></div>
+        <button type="button" class="btn btn-primary" id="btnProceedPayment">Proceed to payment</button>
+        <a href="#" data-page="plan" class="nav-link" style="margin-left:0.5rem">Change selection</a>
+      </div>
+    </section>
+
+    <section id="page-payment" class="page">
+      <div class="container">
+        <h2>Payment (demo)</h2>
+        <form id="formPayment" class="card">
+          <div class="form-row">
+            <label>Name on card</label>
+            <input type="text" name="name_on_card" placeholder="Full name" required>
+          </div>
+          <div class="form-row">
+            <label>Card number</label>
+            <input type="text" name="card_number" placeholder="4111 1111 1111 1111" required>
+          </div>
+          <div class="form-row two-cols">
+            <div>
+              <label>Expiry</label>
+              <input type="text" name="expiry" placeholder="MM/YY" required>
+            </div>
+            <div>
+              <label>CVV</label>
+              <input type="text" name="cvv" placeholder="123" required>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Pay (dummy)</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="page-confirmation" class="page">
+      <div class="container">
+        <h2>Booking confirmed</h2>
+        <div id="confirmationDetails" class="card"></div>
+        <div style="margin-top:1.5rem; display:flex; gap:1rem;">
+          <a href="#" data-page="plan" class="btn btn-primary">Plan another trip</a>
+          <button type="button" class="btn btn-secondary" id="btnDownloadTrip">Download Trip PDF</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Travel History -->
+    <section id="page-history" class="page">
+      <div class="container">
+        <h2>My travel history</h2>
+        <div id="historyList" class="history-list"></div>
+        <p id="historyEmpty" class="empty-msg hidden">No trips saved yet. Plan a trip and save an itinerary.</p>
+      </div>
+    </section>
+
+    <!-- Preferences -->
+    <section id="page-preferences" class="page">
+      <div class="container">
+        <h2>My preferences</h2>
+        <form id="formPreferences" class="preferences-form card">
+          <div class="form-row">
+            <label>Preferred transport modes</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" name="mode" value="flight"> Flight</label>
+              <label><input type="checkbox" name="mode" value="train"> Train</label>
+              <label><input type="checkbox" name="mode" value="bus"> Bus</label>
+              <label><input type="checkbox" name="mode" value="car"> Car</label>
+            </div>
+          </div>
+          <div class="form-row two-cols">
+            <div>
+              <label>Budget min (₹)</label>
+              <input type="number" name="budget_min" id="prefBudgetMin" min="0" step="10" placeholder="0">
+            </div>
+            <div>
+              <label>Budget max (₹)</label>
+              <input type="number" name="budget_max" id="prefBudgetMax" min="0" step="10" placeholder="500">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Save preferences</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal hidden">
+      <div class="modal-content card">
+        <h3>Settings</h3>
+        <p>Enter your API keys to enable live integrations.</p>
+        <p class="text-muted" style="font-size: 0.85rem;">Get a free key from <a
+            href="https://rapidapi.com/skyscanner-api-skyscanner-api-default/api/skyscanner-flight-search"
+            target="_blank">RapidAPI</a>.</p>
+        <p class="text-muted" style="font-size: 0.85rem; margin-top: 0.35rem;">
+          Google setup:
+          enable <strong>Maps JavaScript API</strong> (required for map rendering with your
+          <code>GOOGLE_MAPS_API_KEY</code>). Optional for future upgrades: <strong>Places API</strong>,
+          <strong>Geocoding API</strong>, <strong>Directions API</strong>.
+        </p>
+        <form id="formSettings">
+          <div class="form-row">
+            <label>RapidAPI Key (Flights/Hotels)</label>
+            <input type="text" name="rapidApiKey" placeholder="Paste RapidAPI Key">
+          </div>
+          <div class="form-row">
+            <label>Google Maps API Key (Optional)</label>
+            <input type="text" name="googleMapsApiKey" placeholder="Paste Google Maps Key">
+          </div>
+          <div class="modal-actions" style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+            <button type="button" class="btn btn-ghost" id="closeSettings">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save & Reload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">Voyagr · AI-Assisted Multimodal Travel Planner &copy; 2026</div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+
+</html>
