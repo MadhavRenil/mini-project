@@ -7,6 +7,9 @@
   let lastPlanData = null; // transport_choice, options for real-time sections
   let planState = null; // { source, destination, travel_date, budget, preference_type, num_travelers, selected_option }
   let flightRealtimeOptions = [];
+  let hotelRealtimeOptions = [];
+  let selectedHotel = null;
+  let hotelFetchKey = '';
 
   function showPage(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -69,6 +72,203 @@
     }
   }
 
+  function safeNum(v, fallback = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function buildCheckoutDate(checkin, nights) {
+    const n = Math.max(1, parseInt(nights, 10) || 1);
+    const base = checkin ? new Date(checkin + 'T00:00:00') : new Date();
+    const out = new Date(base.getTime() + n * 24 * 60 * 60 * 1000);
+    return out.toISOString().slice(0, 10);
+  }
+
+  function getStayInputs() {
+    const destination = document.getElementById('planDestination')?.value?.trim() || '';
+    const travelDate = document.getElementById('planTravelDate')?.value || new Date().toISOString().slice(0, 10);
+    const travelers = Math.max(1, parseInt(document.getElementById('planNumTravelers')?.value, 10) || 1);
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const adults = Math.max(1, parseInt(document.getElementById('planHotelAdults')?.value, 10) || travelers);
+    const hotelType = document.querySelector('input[name="hotel_type"]:checked')?.value || 'midrange';
+    return {
+      destination,
+      checkin: travelDate,
+      checkout: buildCheckoutDate(travelDate, nights),
+      nights,
+      adults,
+      hotelType
+    };
+  }
+
+  function selectedHotelForPricing() {
+    if (!selectedHotel) return null;
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const hotelType = document.querySelector('input[name="hotel_type"]:checked')?.value || selectedHotel.category || 'midrange';
+    return {
+      id: selectedHotel.id || null,
+      type: hotelType,
+      name: selectedHotel.name || 'Selected Hotel',
+      price_per_night: Math.max(0, safeNum(selectedHotel.price, 0)),
+      total_nights: nights,
+      total_cost: Math.max(0, safeNum(selectedHotel.price, 0)) * nights,
+      rating: selectedHotel.rating != null ? safeNum(selectedHotel.rating, null) : null,
+      simulated: !!selectedHotel.simulated,
+      source: selectedHotel.simulated ? 'simulated' : 'api',
+      distance_to_center_km: selectedHotel.distance_to_center_km != null ? safeNum(selectedHotel.distance_to_center_km, null) : null,
+      distance_to_airport_km: selectedHotel.distance_to_airport_km != null ? safeNum(selectedHotel.distance_to_airport_km, null) : null,
+      cancellation: selectedHotel.cancellation || null,
+      payment: selectedHotel.payment || null
+    };
+  }
+
+  function applySelectedHotelToOptions(options) {
+    const hotel = selectedHotelForPricing();
+    if (!hotel || !Array.isArray(options)) return options || [];
+    return options.map((opt) => {
+      const existingHotelCost = opt && opt.hotel && opt.hotel.total_cost != null ? safeNum(opt.hotel.total_cost, 0) : 0;
+      const currentTotal = opt && opt.total_cost != null ? safeNum(opt.total_cost, 0) : 0;
+      const transportOnly = Math.max(0, currentTotal - existingHotelCost);
+      return {
+        ...opt,
+        hotel,
+        total_cost: transportOnly + hotel.total_cost,
+        total_with_hotel: transportOnly + hotel.total_cost
+      };
+    });
+  }
+
+  function updateSelectedHotelSummary() {
+    const box = document.getElementById('selectedHotelSummary');
+    if (!box) return;
+    if (!selectedHotel) {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const nightly = Math.max(0, safeNum(selectedHotel.price, 0));
+    const total = nightly * nights;
+    const rating = selectedHotel.rating != null ? `${safeNum(selectedHotel.rating).toFixed(1)}/10` : 'No rating';
+    const center = selectedHotel.distance_to_center_km != null ? ` · ${safeNum(selectedHotel.distance_to_center_km).toFixed(1)} km to center` : '';
+    box.classList.remove('hidden');
+    box.innerHTML = `<strong>Selected stay:</strong> ${selectedHotel.name || 'Hotel'} · ₹${nightly.toLocaleString('en-IN')}/night · ${nights} night(s) = ₹${total.toLocaleString('en-IN')} · ${rating}${center}`;
+  }
+
+  function renderHotelsStepList() {
+    const list = document.getElementById('wizardHotelsList');
+    if (!list) return;
+    const maxPrice = safeNum(document.getElementById('hotelMaxPrice')?.value, 0);
+    const minRating = safeNum(document.getElementById('hotelMinRating')?.value, 0);
+    const sortBy = document.getElementById('hotelSortBy')?.value || 'price_asc';
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const hotelType = document.querySelector('input[name="hotel_type"]:checked')?.value || 'midrange';
+
+    let hotels = (hotelRealtimeOptions || []).filter((h) => {
+      const priceOk = !maxPrice || safeNum(h.price, 0) <= maxPrice;
+      const ratingVal = h.rating != null ? safeNum(h.rating, 0) : 0;
+      const ratingOk = !minRating || ratingVal >= minRating;
+      const typeOk = !hotelType || !h.category || h.category === hotelType;
+      return priceOk && ratingOk && typeOk;
+    });
+
+    hotels = hotels.sort((a, b) => {
+      if (sortBy === 'price_desc') return safeNum(b.price, 0) - safeNum(a.price, 0);
+      if (sortBy === 'rating_desc') return safeNum(b.rating, 0) - safeNum(a.rating, 0);
+      return safeNum(a.price, 0) - safeNum(b.price, 0);
+    });
+
+    if (!hotels.length) {
+      list.innerHTML = '<div class="section-empty">No hotels match your filters. Try widening price/rating filters.</div>';
+      return;
+    }
+
+    list.innerHTML = hotels.map((h, idx) => {
+      const id = h.id || `hotel-${idx}`;
+      const price = Math.max(0, safeNum(h.price, 0));
+      const rating = h.rating != null ? `${safeNum(h.rating, 0).toFixed(1)}/10` : 'No rating';
+      const total = price * nights;
+      const isSelected = selectedHotel && (selectedHotel.id ? selectedHotel.id === id : selectedHotel.name === h.name);
+      const distanceCenter = h.distance_to_center_km != null ? `${safeNum(h.distance_to_center_km, 0).toFixed(1)} km to center` : 'Center distance n/a';
+      const distanceAirport = h.distance_to_airport_km != null ? `${safeNum(h.distance_to_airport_km, 0).toFixed(1)} km to airport` : 'Airport distance n/a';
+      return `
+        <div class="hotel-card card ${isSelected ? 'selected' : ''}" data-hotel-id="${id}">
+          <div class="hotel-head">
+            <strong>${h.name || 'Hotel'}</strong>
+            <span class="hotel-price">₹${price.toLocaleString('en-IN')}${h.simulated ? '/night (est.)' : '/night'}</span>
+          </div>
+          <div class="hotel-meta">
+            <span>${rating}</span>
+            <span>Stay total: ₹${total.toLocaleString('en-IN')}</span>
+            <span>${distanceCenter}</span>
+            <span>${distanceAirport}</span>
+          </div>
+          <div class="hotel-tags">
+            <span class="hotel-tag">${h.category || 'stay'}</span>
+            <span class="hotel-tag">${h.cancellation || 'Cancellation info unavailable'}</span>
+            <span class="hotel-tag">${h.payment || 'Payment info unavailable'}</span>
+          </div>
+          <div class="hotel-actions">
+            <button type="button" class="btn ${isSelected ? 'btn-selected' : 'btn-ghost'} btn-pick-hotel" data-hotel-id="${id}">
+              ${isSelected ? 'Selected' : 'Select this hotel'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.btn-pick-hotel').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const hotelId = btn.getAttribute('data-hotel-id');
+        const picked = hotelRealtimeOptions.find(h => String(h.id || '') === String(hotelId)) || null;
+        if (!picked) return;
+        selectedHotel = { ...picked };
+        updateSelectedHotelSummary();
+        renderHotelsStepList();
+      });
+    });
+  }
+
+  async function refreshStayHotels(forceReload = false) {
+    const list = document.getElementById('wizardHotelsList');
+    if (!list) return;
+    const stay = getStayInputs();
+    if (!stay.destination) {
+      list.innerHTML = '<div class="section-empty">Enter destination in Step 1 to load hotel options.</div>';
+      return;
+    }
+    const fetchKey = `${stay.destination}|${stay.checkin}|${stay.checkout}|${stay.adults}|${stay.hotelType}`;
+    if (!forceReload && hotelRealtimeOptions.length && hotelFetchKey === fetchKey) {
+      renderHotelsStepList();
+      return;
+    }
+    hotelFetchKey = fetchKey;
+    list.innerHTML = '<p class="loading">Loading hotel prices…</p>';
+    try {
+      const q = new URLSearchParams({
+        destination: stay.destination,
+        checkin: stay.checkin,
+        checkout: stay.checkout,
+        adults: String(stay.adults),
+        hotel_type: stay.hotelType
+      });
+      const data = await fetchJSON(API + '/hotels?' + q.toString());
+      hotelRealtimeOptions = (data.hotels || []).map((h, i) => ({
+        ...h,
+        id: h.id || `hotel-${i + 1}`,
+        category: h.category || (safeNum(h.price, 0) <= 1800 ? 'hostel' : safeNum(h.price, 0) <= 3200 ? 'budget' : safeNum(h.price, 0) <= 7000 ? 'midrange' : safeNum(h.price, 0) <= 9000 ? 'apartment' : 'luxury')
+      }));
+      if (selectedHotel) {
+        const stillExists = hotelRealtimeOptions.find(h => String(h.id) === String(selectedHotel.id));
+        if (!stillExists) selectedHotel = null;
+      }
+      renderHotelsStepList();
+      updateSelectedHotelSummary();
+    } catch (_) {
+      list.innerHTML = '<div class="section-empty">Could not load hotel prices right now. Try again in a few seconds.</div>';
+    }
+  }
+
   async function checkAuth() {
     try {
       const { user } = await fetchJSON(API + '/auth/me');
@@ -113,6 +313,10 @@
 
   function initPlanPage() {
     document.getElementById('planResults').classList.add('hidden');
+    hotelRealtimeOptions = [];
+    selectedHotel = null;
+    hotelFetchKey = '';
+    updateSelectedHotelSummary();
     showWizardStep(1);
   }
 
@@ -137,7 +341,7 @@
     showWizardStep(2);
   });
   document.getElementById('wizardBack2')?.addEventListener('click', () => showWizardStep(1));
-  document.getElementById('wizardNext2')?.addEventListener('click', () => {
+  document.getElementById('wizardNext2')?.addEventListener('click', async () => {
     const selected = Array.from(document.querySelectorAll('input[name="transport"]:checked'));
     const err = document.getElementById('wizardStep2Error');
     if (!selected.length) {
@@ -153,11 +357,38 @@
       err.classList.add('hidden');
       err.textContent = '';
     }
+    const stayAdults = document.getElementById('planHotelAdults');
+    const travelers = Math.max(1, parseInt(document.getElementById('planNumTravelers')?.value, 10) || 1);
+    if (stayAdults && (!stayAdults.value || safeNum(stayAdults.value, 0) < 1)) stayAdults.value = String(travelers);
     showWizardStep(3);
+    await refreshStayHotels(true);
   });
   document.getElementById('wizardBack3')?.addEventListener('click', () => showWizardStep(2));
   document.getElementById('wizardNext3')?.addEventListener('click', () => showWizardStep(4));
   document.getElementById('wizardBack4')?.addEventListener('click', () => showWizardStep(3));
+  document.getElementById('planHotelNights')?.addEventListener('change', async () => {
+    updateSelectedHotelSummary();
+    await refreshStayHotels(true);
+  });
+  document.getElementById('planHotelAdults')?.addEventListener('change', async () => {
+    await refreshStayHotels(true);
+  });
+  document.getElementById('hotelMaxPrice')?.addEventListener('input', renderHotelsStepList);
+  document.getElementById('hotelMinRating')?.addEventListener('change', renderHotelsStepList);
+  document.getElementById('hotelSortBy')?.addEventListener('change', renderHotelsStepList);
+  document.getElementById('planDestination')?.addEventListener('change', async () => {
+    if (document.getElementById('wizardStep3')?.classList.contains('active')) await refreshStayHotels(true);
+  });
+  document.getElementById('planTravelDate')?.addEventListener('change', async () => {
+    if (document.getElementById('wizardStep3')?.classList.contains('active')) await refreshStayHotels(true);
+  });
+  document.querySelectorAll('input[name="hotel_type"]').forEach(r => {
+    r.addEventListener('change', async () => {
+      selectedHotel = null;
+      updateSelectedHotelSummary();
+      await refreshStayHotels(true);
+    });
+  });
 
   document.getElementById('wizardSubmit')?.addEventListener('click', async () => {
     const submitBtn = document.getElementById('wizardSubmit');
@@ -170,6 +401,8 @@
     const transport_choice = Array.from(document.querySelectorAll('input[name="transport"]:checked')).map(c => c.value);
     const hotel_type = document.querySelector('input[name="hotel_type"]:checked')?.value || 'midrange';
     const hotel_nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const hotel_adults = Math.max(1, parseInt(document.getElementById('planHotelAdults')?.value, 10) || num_travelers);
+    const selected_hotel = selectedHotelForPricing();
 
     const resultsEl = document.getElementById('planResults');
     const optionsList = document.getElementById('optionsList');
@@ -196,14 +429,17 @@
           transport_choice: transport_choice.length ? transport_choice : null,
           hotel_type,
           hotel_nights,
+          hotel_adults,
+          selected_hotel,
           preferences: prefs
         })
       });
 
       if (data.real_time_prices && realTimeBadge) realTimeBadge.classList.remove('hidden');
+      const optionsWithSelectedHotel = applySelectedHotelToOptions(data.options || []);
 
       optionsList.innerHTML = '';
-      (data.options || []).forEach((opt, i) => {
+      optionsWithSelectedHotel.forEach((opt, i) => {
         const card = document.createElement('div');
         card.className = 'option-card' + (i === 0 ? ' recommended' : '');
         const modes = (opt.modes || opt.legs?.map(l => l.modeName || l.mode) || []);
@@ -212,7 +448,9 @@
         const duration = opt.total_duration_minutes != null ? opt.total_duration_minutes : (opt.legs || []).reduce((s, l) => s + (l.duration_minutes || 0), 0);
         const dist = opt.total_distance_km != null ? opt.total_distance_km : (opt.legs || []).reduce((s, l) => s + (l.distance_km || 0), 0);
         const hotel = opt.hotel;
-        const hotelLine = hotel ? `Stay: ${hotel.name} (${hotel.total_nights} night${hotel.total_nights > 1 ? 's' : ''})` : 'Stay details not available';
+        const hotelLine = hotel
+          ? `Stay: ${hotel.name} (${hotel.total_nights} night${hotel.total_nights > 1 ? 's' : ''}) · ₹${safeNum(hotel.price_per_night, 0).toLocaleString('en-IN')}/night`
+          : 'Stay details not available';
         const primaryCarrier = opt.carrier || (opt.legs && opt.legs[0] && opt.legs[0].modeName) || 'Multimodal';
         const refCode = opt.quote_id || opt.id || `OPT-${i + 1}`;
         const routeType = opt.direct !== false ? 'Direct' : '1 stop';
@@ -272,7 +510,7 @@
         optionsList.appendChild(card);
       });
 
-      if (!data.options || data.options.length === 0) {
+      if (!optionsWithSelectedHotel || optionsWithSelectedHotel.length === 0) {
         optionsList.innerHTML = '<div class="section-empty">No route options found for this combination. Try another date, city pair, or transport mode.</div>';
       }
 
@@ -283,12 +521,23 @@
         btn.addEventListener('click', () => saveItineraryFromCard(btn.closest('.option-card')));
       });
 
-      lastPlanData = { transport_choice, options: data.options, source, destination, travel_date, budget, preference_type, num_travelers };
+      lastPlanData = {
+        transport_choice,
+        options: optionsWithSelectedHotel,
+        source,
+        destination,
+        travel_date,
+        budget,
+        preference_type,
+        num_travelers,
+        hotel_type,
+        hotel_nights,
+        selected_hotel
+      };
       renderMap(source, destination);
       loadEvents(destination);
-      loadRealTimeFlights(data.options, transport_choice);
-      loadRealTimeHotels(destination, travel_date);
-      loadFuelCostIfCar(data.options, transport_choice);
+      loadRealTimeFlights(optionsWithSelectedHotel, transport_choice);
+      loadFuelCostIfCar(optionsWithSelectedHotel, transport_choice);
       notify('Trip options loaded.', 'success');
     } catch (err) {
       optionsList.innerHTML = '<p class="auth-error">' + (err.message || 'Failed to load options') + '</p>';
@@ -381,7 +630,9 @@
     const opt = planState.selected_option;
     const cost = opt.total_cost != null ? opt.total_cost : (opt.total_with_hotel != null ? opt.total_with_hotel : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0));
     const modes = (opt.modes || opt.legs?.map(l => l.modeName || l.mode) || []).join(' → ');
-    const hotelLine = opt.hotel ? `<div class="meta">Stay: ${opt.hotel.name} (${opt.hotel.total_nights} night(s))</div>` : '';
+    const hotelLine = opt.hotel
+      ? `<div class="meta">Stay: ${opt.hotel.name} (${opt.hotel.total_nights} night(s)) · ₹${safeNum(opt.hotel.price_per_night, 0).toLocaleString('en-IN')}/night · Total ₹${safeNum(opt.hotel.total_cost, 0).toLocaleString('en-IN')}</div>`
+      : '';
     el.innerHTML = `
       <div class="route">${planState.source} → ${planState.destination}</div>
       <div class="meta">Travel date: ${planState.travel_date || '—'} · Travelers: ${planState.num_travelers}</div>
@@ -651,25 +902,6 @@
         </div>
       `;
     }).join('');
-  }
-
-  async function loadRealTimeHotels(destination, travelDate) {
-    const section = document.getElementById('realTimeHotelsSection');
-    const list = document.getElementById('realTimeHotelsList');
-    if (!section || !list) return;
-    section.classList.remove('hidden');
-    list.innerHTML = '<p class="loading">Loading hotel prices…</p>';
-    try {
-      const checkin = travelDate || new Date().toISOString().slice(0, 10);
-      const checkout = new Date(new Date(checkin).getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const data = await fetchJSON(API + '/hotels?destination=' + encodeURIComponent(destination) + '&checkin=' + checkin + '&checkout=' + checkout);
-      const hotels = data.hotels || [];
-      list.innerHTML = hotels.length
-        ? hotels.map(h => `<div class="hotel-card card"><strong>${h.name || 'Hotel'}</strong><span class="hotel-price">₹${(h.price || 0).toFixed(0)}${h.simulated ? '/night (est.)' : ''}</span>${h.rating ? ' · ' + h.rating + '/10' : ''}</div>`).join('')
-        : '<div class="section-empty">No hotels found for these dates. Try different check-in/check-out values.</div>';
-    } catch (_) {
-      list.innerHTML = '<div class="section-empty">Could not load hotel prices right now. Try again in a few seconds.</div>';
-    }
   }
 
   async function loadFuelCostIfCar(options, transportChoice) {
@@ -1098,10 +1330,20 @@
 
   // Hook into flight selection to trigger itinerary with selected option context.
   window.selectFlight = function (index) {
-    const opt = flightRealtimeOptions[Number(index)];
+    const original = flightRealtimeOptions[Number(index)];
+    const opt = original ? { ...original } : null;
     if (!opt || !lastPlanData) {
       notify('Please generate route options first.', 'error');
       return;
+    }
+    const selectedHotelDetails = selectedHotelForPricing() || lastPlanData.selected_hotel || null;
+    if (selectedHotelDetails) {
+      const current = opt.total_cost != null ? safeNum(opt.total_cost, 0) : safeNum(opt.total_with_hotel, 0);
+      const existingHotelCost = opt.hotel && opt.hotel.total_cost != null ? safeNum(opt.hotel.total_cost, 0) : 0;
+      const transportOnly = Math.max(0, current - existingHotelCost);
+      opt.hotel = selectedHotelDetails;
+      opt.total_cost = transportOnly + safeNum(selectedHotelDetails.total_cost, 0);
+      opt.total_with_hotel = opt.total_cost;
     }
     planState = {
       source: lastPlanData.source,

@@ -155,6 +155,7 @@
         <!-- Step 3: Hotel / Stay type -->
         <div id="wizardStep3" class="wizard-panel card">
           <h3>Where do you want to stay?</h3>
+          <p class="wizard-hint">Choose a stay type, then select a specific hotel with live pricing.</p>
           <div class="choice-cards" id="hotelChoices">
             <label class="choice-card">
               <input type="radio" name="hotel_type" value="budget">
@@ -182,9 +183,46 @@
               <span class="choice-meta">Space, kitchen</span>
             </label>
           </div>
-          <div class="form-row">
-            <label>Nights at destination</label>
-            <input type="number" id="planHotelNights" name="hotel_nights" min="1" max="30" value="2">
+          <div class="form-row two-cols">
+            <div>
+              <label>Nights at destination</label>
+              <input type="number" id="planHotelNights" name="hotel_nights" min="1" max="30" value="2">
+            </div>
+            <div>
+              <label>Adults for stay pricing</label>
+              <input type="number" id="planHotelAdults" name="hotel_adults" min="1" max="10" value="1">
+            </div>
+          </div>
+          <div class="hotel-controls card">
+            <div class="form-row two-cols">
+              <div>
+                <label>Max price/night (₹)</label>
+                <input type="number" id="hotelMaxPrice" min="500" step="100" placeholder="e.g. 7000">
+              </div>
+              <div>
+                <label>Min rating</label>
+                <select id="hotelMinRating">
+                  <option value="">Any</option>
+                  <option value="6">6+</option>
+                  <option value="7">7+</option>
+                  <option value="8">8+</option>
+                  <option value="9">9+</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Sort by</label>
+              <select id="hotelSortBy">
+                <option value="price_asc">Price: Low to high</option>
+                <option value="price_desc">Price: High to low</option>
+                <option value="rating_desc">Rating: High to low</option>
+              </select>
+            </div>
+          </div>
+          <div id="selectedHotelSummary" class="selected-hotel-summary hidden"></div>
+          <div class="real-time-section stay-live-block">
+            <h4>Live hotel options for your stay</h4>
+            <div id="wizardHotelsList" class="hotels-list"></div>
           </div>
           <div class="wizard-nav">
             <button type="button" class="btn btn-ghost" id="wizardBack3">← Back</button>
@@ -223,10 +261,6 @@
           <div id="realTimeFlightsSection" class="real-time-section hidden">
             <h3>✈ Real-time flight options</h3>
             <div id="realTimeFlightsList" class="flights-list"></div>
-          </div>
-          <div id="realTimeHotelsSection" class="real-time-section hidden">
-            <h3>🏨 Real-time hotel prices at destination</h3>
-            <div id="realTimeHotelsList" class="hotels-list"></div>
           </div>
           <div id="fuelCostSection" class="real-time-section hidden">
             <h3>⛽ Fuel cost (real-time petrol price)</h3>

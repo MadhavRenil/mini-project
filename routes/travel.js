@@ -24,7 +24,9 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     num_travelers,
     transport_choice,
     hotel_type,
-    hotel_nights
+    hotel_nights,
+    hotel_adults,
+    selected_hotel
   } = req.body;
   if (!source || !destination) {
     return res.status(400).json({ error: 'Source and destination required' });
@@ -53,6 +55,7 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     transport_choice,
     hotel_type || 'midrange',
     hotel_nights || 2,
+    selected_hotel || null,
     apiFlights,
     userId,
     prefs
@@ -69,6 +72,8 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     transport_choice: transport_choice || null,
     hotel_type: hotel_type || 'midrange',
     hotel_nights: hotel_nights || 2,
+    hotel_adults: hotel_adults || numT,
+    selected_hotel: selected_hotel || null,
     options,
     real_time_prices: !!apiFlights,
     generated_at: new Date().toISOString()
