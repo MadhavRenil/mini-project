@@ -1,0 +1,1382 @@
+(function () {
+  const API = '/api';
+  let map = null;
+  let mapMarkers = [];
+  let googleMapsApiKey = '';
+  let googleMapInstance = null;
+  let lastPlanData = null; // transport_choice, options for real-time sections
+  let planState = null; // { source, destination, travel_date, budget, preference_type, num_travelers, selected_option }
+  let flightRealtimeOptions = [];
+  let hotelRealtimeOptions = [];
+  let selectedHotel = null;
+  let hotelFetchKey = '';
+
+  function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const page = document.getElementById('page-' + pageId);
+    if (page) page.classList.add('active');
+    if (pageId === 'plan') initPlanPage();
+    if (pageId === 'history') loadHistory();
+    if (pageId === 'preferences') loadPreferences();
+    if (pageId === 'review' && planState) renderReviewSummary();
+    if (pageId === 'confirmation' && planState) renderConfirmation();
+  }
+
+  function setAuthUI(user) {
+    const navLogin = document.getElementById('navLogin');
+    const btnLogout = document.getElementById('btnLogout');
+    const userBadge = document.getElementById('userBadge');
+    if (user) {
+      if (navLogin) navLogin.style.display = 'none';
+      if (btnLogout) { btnLogout.hidden = false; btnLogout.style.display = 'inline-block'; }
+      if (userBadge) userBadge.textContent = user.email;
+    } else {
+      if (navLogin) navLogin.style.display = 'inline-block';
+      if (btnLogout) btnLogout.hidden = true;
+      if (userBadge) userBadge.textContent = '';
+    }
+  }
+
+  async function fetchJSON(url, options = {}) {
+    const res = await fetch(url, { ...options, credentials: 'include' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+
+  // Lightweight toast notifications for UX (replaces blocking alert dialogs)
+  function notify(message, type = 'info') {
+    let wrap = document.getElementById('appToastWrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'appToastWrap';
+      wrap.className = 'app-toast-wrap';
+      document.body.appendChild(wrap);
+    }
+    const toast = document.createElement('div');
+    toast.className = `app-toast ${type}`;
+    toast.textContent = message;
+    wrap.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+  }
+
+  function setButtonLoading(btn, loadingText, isLoading) {
+    if (!btn) return;
+    if (isLoading) {
+      if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+      btn.textContent = loadingText;
+      btn.disabled = true;
+    } else {
+      btn.textContent = btn.dataset.originalText || btn.textContent;
+      btn.disabled = false;
+    }
+  }
+
+  function safeNum(v, fallback = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function buildCheckoutDate(checkin, nights) {
+    const n = Math.max(1, parseInt(nights, 10) || 1);
+    const base = checkin ? new Date(checkin + 'T00:00:00') : new Date();
+    const out = new Date(base.getTime() + n * 24 * 60 * 60 * 1000);
+    return out.toISOString().slice(0, 10);
+  }
+
+  function getStayInputs() {
+    const destination = document.getElementById('planDestination')?.value?.trim() || '';
+    const travelDate = document.getElementById('planTravelDate')?.value || new Date().toISOString().slice(0, 10);
+    const travelers = Math.max(1, parseInt(document.getElementById('planNumTravelers')?.value, 10) || 1);
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const adults = Math.max(1, parseInt(document.getElementById('planHotelAdults')?.value, 10) || travelers);
+    const hotelType = document.querySelector('input[name="hotel_type"]:checked')?.value || 'midrange';
+    return {
+      destination,
+      checkin: travelDate,
+      checkout: buildCheckoutDate(travelDate, nights),
+      nights,
+      adults,
+      hotelType
+    };
+  }
+
+  function selectedHotelForPricing() {
+    if (!selectedHotel) return null;
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const hotelType = document.querySelector('input[name="hotel_type"]:checked')?.value || selectedHotel.category || 'midrange';
+    return {
+      id: selectedHotel.id || null,
+      type: hotelType,
+      name: selectedHotel.name || 'Selected Hotel',
+      price_per_night: Math.max(0, safeNum(selectedHotel.price, 0)),
+      total_nights: nights,
+      total_cost: Math.max(0, safeNum(selectedHotel.price, 0)) * nights,
+      rating: selectedHotel.rating != null ? safeNum(selectedHotel.rating, null) : null,
+      simulated: !!selectedHotel.simulated,
+      source: selectedHotel.simulated ? 'simulated' : 'api',
+      distance_to_center_km: selectedHotel.distance_to_center_km != null ? safeNum(selectedHotel.distance_to_center_km, null) : null,
+      distance_to_airport_km: selectedHotel.distance_to_airport_km != null ? safeNum(selectedHotel.distance_to_airport_km, null) : null,
+      cancellation: selectedHotel.cancellation || null,
+      payment: selectedHotel.payment || null
+    };
+  }
+
+  function applySelectedHotelToOptions(options) {
+    const hotel = selectedHotelForPricing();
+    if (!hotel || !Array.isArray(options)) return options || [];
+    return options.map((opt) => {
+      const existingHotelCost = opt && opt.hotel && opt.hotel.total_cost != null ? safeNum(opt.hotel.total_cost, 0) : 0;
+      const currentTotal = opt && opt.total_cost != null ? safeNum(opt.total_cost, 0) : 0;
+      const transportOnly = Math.max(0, currentTotal - existingHotelCost);
+      return {
+        ...opt,
+        hotel,
+        total_cost: transportOnly + hotel.total_cost,
+        total_with_hotel: transportOnly + hotel.total_cost
+      };
+    });
+  }
+
+  function updateSelectedHotelSummary() {
+    const box = document.getElementById('selectedHotelSummary');
+    if (!box) return;
+    if (!selectedHotel) {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const nightly = Math.max(0, safeNum(selectedHotel.price, 0));
+    const total = nightly * nights;
+    const rating = selectedHotel.rating != null ? `${safeNum(selectedHotel.rating).toFixed(1)}/10` : 'No rating';
+    const center = selectedHotel.distance_to_center_km != null ? ` · ${safeNum(selectedHotel.distance_to_center_km).toFixed(1)} km to center` : '';
+    box.classList.remove('hidden');
+    box.innerHTML = `<strong>Selected stay:</strong> ${selectedHotel.name || 'Hotel'} · ₹${nightly.toLocaleString('en-IN')}/night · ${nights} night(s) = ₹${total.toLocaleString('en-IN')} · ${rating}${center}`;
+  }
+
+  function renderHotelsStepList() {
+    const list = document.getElementById('wizardHotelsList');
+    if (!list) return;
+    const maxPrice = safeNum(document.getElementById('hotelMaxPrice')?.value, 0);
+    const minRating = safeNum(document.getElementById('hotelMinRating')?.value, 0);
+    const sortBy = document.getElementById('hotelSortBy')?.value || 'price_asc';
+    const nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const hotelType = document.querySelector('input[name="hotel_type"]:checked')?.value || 'midrange';
+
+    let hotels = (hotelRealtimeOptions || []).filter((h) => {
+      const priceOk = !maxPrice || safeNum(h.price, 0) <= maxPrice;
+      const ratingVal = h.rating != null ? safeNum(h.rating, 0) : 0;
+      const ratingOk = !minRating || ratingVal >= minRating;
+      const typeOk = !hotelType || !h.category || h.category === hotelType;
+      return priceOk && ratingOk && typeOk;
+    });
+
+    hotels = hotels.sort((a, b) => {
+      if (sortBy === 'price_desc') return safeNum(b.price, 0) - safeNum(a.price, 0);
+      if (sortBy === 'rating_desc') return safeNum(b.rating, 0) - safeNum(a.rating, 0);
+      return safeNum(a.price, 0) - safeNum(b.price, 0);
+    });
+
+    if (!hotels.length) {
+      list.innerHTML = '<div class="section-empty">No hotels match your filters. Try widening price/rating filters.</div>';
+      return;
+    }
+
+    list.innerHTML = hotels.map((h, idx) => {
+      const id = h.id || `hotel-${idx}`;
+      const price = Math.max(0, safeNum(h.price, 0));
+      const rating = h.rating != null ? `${safeNum(h.rating, 0).toFixed(1)}/10` : 'No rating';
+      const total = price * nights;
+      const isSelected = selectedHotel && (selectedHotel.id ? selectedHotel.id === id : selectedHotel.name === h.name);
+      const distanceCenter = h.distance_to_center_km != null ? `${safeNum(h.distance_to_center_km, 0).toFixed(1)} km to center` : 'Center distance n/a';
+      const distanceAirport = h.distance_to_airport_km != null ? `${safeNum(h.distance_to_airport_km, 0).toFixed(1)} km to airport` : 'Airport distance n/a';
+      return `
+        <div class="hotel-card card ${isSelected ? 'selected' : ''}" data-hotel-id="${id}">
+          <div class="hotel-head">
+            <strong>${h.name || 'Hotel'}</strong>
+            <span class="hotel-price">₹${price.toLocaleString('en-IN')}${h.simulated ? '/night (est.)' : '/night'}</span>
+          </div>
+          <div class="hotel-meta">
+            <span>${rating}</span>
+            <span>Stay total: ₹${total.toLocaleString('en-IN')}</span>
+            <span>${distanceCenter}</span>
+            <span>${distanceAirport}</span>
+          </div>
+          <div class="hotel-tags">
+            <span class="hotel-tag">${h.category || 'stay'}</span>
+            <span class="hotel-tag">${h.cancellation || 'Cancellation info unavailable'}</span>
+            <span class="hotel-tag">${h.payment || 'Payment info unavailable'}</span>
+          </div>
+          <div class="hotel-actions">
+            <button type="button" class="btn ${isSelected ? 'btn-selected' : 'btn-ghost'} btn-pick-hotel" data-hotel-id="${id}">
+              ${isSelected ? 'Selected' : 'Select this hotel'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.btn-pick-hotel').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const hotelId = btn.getAttribute('data-hotel-id');
+        const picked = hotelRealtimeOptions.find(h => String(h.id || '') === String(hotelId)) || null;
+        if (!picked) return;
+        selectedHotel = { ...picked };
+        updateSelectedHotelSummary();
+        renderHotelsStepList();
+      });
+    });
+  }
+
+  async function refreshStayHotels(forceReload = false) {
+    const list = document.getElementById('wizardHotelsList');
+    if (!list) return;
+    const stay = getStayInputs();
+    if (!stay.destination) {
+      list.innerHTML = '<div class="section-empty">Enter destination in Step 1 to load hotel options.</div>';
+      return;
+    }
+    const fetchKey = `${stay.destination}|${stay.checkin}|${stay.checkout}|${stay.adults}|${stay.hotelType}`;
+    if (!forceReload && hotelRealtimeOptions.length && hotelFetchKey === fetchKey) {
+      renderHotelsStepList();
+      return;
+    }
+    hotelFetchKey = fetchKey;
+    list.innerHTML = '<p class="loading">Loading hotel prices…</p>';
+    try {
+      const q = new URLSearchParams({
+        destination: stay.destination,
+        checkin: stay.checkin,
+        checkout: stay.checkout,
+        adults: String(stay.adults),
+        hotel_type: stay.hotelType
+      });
+      const data = await fetchJSON(API + '/hotels?' + q.toString());
+      hotelRealtimeOptions = (data.hotels || []).map((h, i) => ({
+        ...h,
+        id: h.id || `hotel-${i + 1}`,
+        category: h.category || (safeNum(h.price, 0) <= 1800 ? 'hostel' : safeNum(h.price, 0) <= 3200 ? 'budget' : safeNum(h.price, 0) <= 7000 ? 'midrange' : safeNum(h.price, 0) <= 9000 ? 'apartment' : 'luxury')
+      }));
+      if (selectedHotel) {
+        const stillExists = hotelRealtimeOptions.find(h => String(h.id) === String(selectedHotel.id));
+        if (!stillExists) selectedHotel = null;
+      }
+      renderHotelsStepList();
+      updateSelectedHotelSummary();
+    } catch (_) {
+      list.innerHTML = '<div class="section-empty">Could not load hotel prices right now. Try again in a few seconds.</div>';
+    }
+  }
+
+  async function checkAuth() {
+    try {
+      const { user } = await fetchJSON(API + '/auth/me');
+      setAuthUI(user);
+      return user;
+    } catch (_) {
+      setAuthUI(null);
+      return null;
+    }
+  }
+
+  // Logout
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    try {
+      await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
+      await checkAuth();
+      showPage('landing');
+    } catch (_) { }
+  });
+
+  // Nav links
+  document.querySelectorAll('[data-page]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      if (link.tagName === 'A') e.preventDefault();
+      const page = link.dataset.page;
+      showPage(page);
+    });
+  });
+
+  // Wizard: step navigation
+  function showWizardStep(step) {
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.toggle('active', parseInt(s.dataset.step, 10) === step));
+    document.querySelectorAll('.wizard-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('wizardStep' + step);
+    if (panel) {
+      panel.classList.add('active');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const focusTarget = panel.querySelector('input, select, button');
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
+    }
+  }
+
+  function initPlanPage() {
+    document.getElementById('planResults').classList.add('hidden');
+    hotelRealtimeOptions = [];
+    selectedHotel = null;
+    hotelFetchKey = '';
+    updateSelectedHotelSummary();
+    showWizardStep(1);
+  }
+
+  document.getElementById('wizardNext1')?.addEventListener('click', () => {
+    const s = document.getElementById('planSource');
+    const d = document.getElementById('planDestination');
+    const t = document.getElementById('planTravelDate');
+    const err = document.getElementById('wizardStep1Error');
+    if (err) {
+      err.classList.add('hidden');
+      err.textContent = '';
+    }
+    if (!s?.value?.trim() || !d?.value?.trim() || !t?.value) {
+      if (err) {
+        err.textContent = 'Please enter source, destination, and travel date.';
+        err.classList.remove('hidden');
+      } else {
+        notify('Please enter source, destination, and travel date.', 'error');
+      }
+      return;
+    }
+    showWizardStep(2);
+  });
+  document.getElementById('wizardBack2')?.addEventListener('click', () => showWizardStep(1));
+  document.getElementById('wizardNext2')?.addEventListener('click', async () => {
+    const selected = Array.from(document.querySelectorAll('input[name="transport"]:checked'));
+    const err = document.getElementById('wizardStep2Error');
+    if (!selected.length) {
+      if (err) {
+        err.textContent = 'Select at least one transport mode to continue.';
+        err.classList.remove('hidden');
+      } else {
+        notify('Select at least one transport mode to continue.', 'error');
+      }
+      return;
+    }
+    if (err) {
+      err.classList.add('hidden');
+      err.textContent = '';
+    }
+    const stayAdults = document.getElementById('planHotelAdults');
+    const travelers = Math.max(1, parseInt(document.getElementById('planNumTravelers')?.value, 10) || 1);
+    if (stayAdults && (!stayAdults.value || safeNum(stayAdults.value, 0) < 1)) stayAdults.value = String(travelers);
+    showWizardStep(3);
+    await refreshStayHotels(true);
+  });
+  document.getElementById('wizardBack3')?.addEventListener('click', () => showWizardStep(2));
+  document.getElementById('wizardNext3')?.addEventListener('click', () => showWizardStep(4));
+  document.getElementById('wizardBack4')?.addEventListener('click', () => showWizardStep(3));
+  document.getElementById('planHotelNights')?.addEventListener('change', async () => {
+    updateSelectedHotelSummary();
+    await refreshStayHotels(true);
+  });
+  document.getElementById('planHotelAdults')?.addEventListener('change', async () => {
+    await refreshStayHotels(true);
+  });
+  document.getElementById('hotelMaxPrice')?.addEventListener('input', renderHotelsStepList);
+  document.getElementById('hotelMinRating')?.addEventListener('change', renderHotelsStepList);
+  document.getElementById('hotelSortBy')?.addEventListener('change', renderHotelsStepList);
+  document.getElementById('planDestination')?.addEventListener('change', async () => {
+    if (document.getElementById('wizardStep3')?.classList.contains('active')) await refreshStayHotels(true);
+  });
+  document.getElementById('planTravelDate')?.addEventListener('change', async () => {
+    if (document.getElementById('wizardStep3')?.classList.contains('active')) await refreshStayHotels(true);
+  });
+  document.querySelectorAll('input[name="hotel_type"]').forEach(r => {
+    r.addEventListener('change', async () => {
+      selectedHotel = null;
+      updateSelectedHotelSummary();
+      await refreshStayHotels(true);
+    });
+  });
+
+  document.getElementById('wizardSubmit')?.addEventListener('click', async () => {
+    const submitBtn = document.getElementById('wizardSubmit');
+    const source = document.getElementById('planSource')?.value?.trim();
+    const destination = document.getElementById('planDestination')?.value?.trim();
+    const travel_date = document.getElementById('planTravelDate')?.value || null;
+    const num_travelers = Math.max(1, parseInt(document.getElementById('planNumTravelers')?.value, 10) || 1);
+    const budget = document.getElementById('planBudget')?.value ? parseFloat(document.getElementById('planBudget').value) : null;
+    const preference_type = document.getElementById('planPreference')?.value || null;
+    const transport_choice = Array.from(document.querySelectorAll('input[name="transport"]:checked')).map(c => c.value);
+    const hotel_type = document.querySelector('input[name="hotel_type"]:checked')?.value || 'midrange';
+    const hotel_nights = Math.max(1, parseInt(document.getElementById('planHotelNights')?.value, 10) || 2);
+    const hotel_adults = Math.max(1, parseInt(document.getElementById('planHotelAdults')?.value, 10) || num_travelers);
+    const selected_hotel = selectedHotelForPricing();
+
+    const resultsEl = document.getElementById('planResults');
+    const optionsList = document.getElementById('optionsList');
+    const realTimeBadge = document.getElementById('realTimeBadge');
+    optionsList.innerHTML = '<p class="loading">Loading options & real-time prices…</p>';
+    resultsEl.classList.remove('hidden');
+    if (realTimeBadge) realTimeBadge.classList.add('hidden');
+    setButtonLoading(submitBtn, 'Loading options…', true);
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    try {
+      const prefs = await getPreferencesForPlan();
+      const data = await fetchJSON(API + '/travel/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source,
+          destination,
+          travel_date,
+          start_date: travel_date,
+          num_travelers,
+          budget,
+          preference_type,
+          transport_choice: transport_choice.length ? transport_choice : null,
+          hotel_type,
+          hotel_nights,
+          hotel_adults,
+          selected_hotel,
+          preferences: prefs
+        })
+      });
+
+      if (data.real_time_prices && realTimeBadge) realTimeBadge.classList.remove('hidden');
+      const optionsWithSelectedHotel = applySelectedHotelToOptions(data.options || []);
+
+      optionsList.innerHTML = '';
+      optionsWithSelectedHotel.forEach((opt, i) => {
+        const card = document.createElement('div');
+        card.className = 'option-card' + (i === 0 ? ' recommended' : '');
+        const modes = (opt.modes || opt.legs?.map(l => l.modeName || l.mode) || []);
+        const modesText = modes.join(' → ');
+        const cost = opt.total_cost != null ? opt.total_cost : (opt.total_with_hotel != null ? opt.total_with_hotel : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0));
+        const duration = opt.total_duration_minutes != null ? opt.total_duration_minutes : (opt.legs || []).reduce((s, l) => s + (l.duration_minutes || 0), 0);
+        const dist = opt.total_distance_km != null ? opt.total_distance_km : (opt.legs || []).reduce((s, l) => s + (l.distance_km || 0), 0);
+        const hotel = opt.hotel;
+        const hotelLine = hotel
+          ? `Stay: ${hotel.name} (${hotel.total_nights} night${hotel.total_nights > 1 ? 's' : ''}) · ₹${safeNum(hotel.price_per_night, 0).toLocaleString('en-IN')}/night`
+          : 'Stay details not available';
+        const primaryCarrier = opt.carrier || (opt.legs && opt.legs[0] && opt.legs[0].modeName) || 'Multimodal';
+        const refCode = opt.quote_id || opt.id || `OPT-${i + 1}`;
+        const routeType = opt.direct !== false ? 'Direct' : '1 stop';
+        const sourceCode = (source || 'SRC').slice(0, 3).toUpperCase();
+        const destCode = (destination || 'DST').slice(0, 3).toUpperCase();
+        const hours = Math.floor(duration / 60);
+        const mins = duration % 60;
+        const baseDep = travel_date ? new Date(`${travel_date}T06:00:00`) : new Date();
+        baseDep.setHours(6 + (i % 10), (i * 7) % 60, 0, 0);
+        const baseArr = new Date(baseDep.getTime() + (duration * 60 * 1000));
+        const depTime = `${String(baseDep.getHours()).padStart(2, '0')}:${String(baseDep.getMinutes()).padStart(2, '0')}`;
+        const arrTime = `${String(baseArr.getHours()).padStart(2, '0')}:${String(baseArr.getMinutes()).padStart(2, '0')}`;
+        card.innerHTML = `
+          <div class="option-g-main">
+            <div class="option-g-head">
+              <span class="option-modes">${primaryCarrier}${opt.from_api ? ' <span class="api-badge">Live price</span>' : ''}</span>
+              <span class="option-g-ref">${refCode}</span>
+            </div>
+            <div class="option-g-route">
+              <div class="option-g-timeblock">
+                <span class="option-g-time">${depTime}</span>
+                <span class="option-g-code">${sourceCode}</span>
+              </div>
+              <div class="option-g-mid">
+                <span class="option-g-duration">${hours}h ${mins}m</span>
+                <div class="option-g-line"></div>
+                <span class="option-g-sub">${routeType} · ${dist.toFixed(0)} km</span>
+              </div>
+              <div class="option-g-timeblock">
+                <span class="option-g-time">${arrTime}</span>
+                <span class="option-g-code">${destCode}</span>
+              </div>
+            </div>
+            <div class="option-stats">
+              <span>${modesText || 'Multimodal'}</span>
+              <span>${hotelLine}</span>
+            </div>
+          </div>
+          <div class="option-g-side">
+            <div class="option-g-price">₹${(cost || 0).toFixed(2)}</div>
+            <div class="option-g-price-sub">total trip estimate</div>
+            <div class="option-actions">
+              <button type="button" class="btn btn-primary btn-select-review" data-index="${i}">Select & review</button>
+              <button type="button" class="btn btn-ghost btn-save-option" data-index="${i}">Save only</button>
+            </div>
+          </div>
+        `;
+        card.dataset.option = JSON.stringify(opt);
+        card.dataset.source = source;
+        card.dataset.destination = destination;
+        card.dataset.travel_date = travel_date || '';
+        card.dataset.budget = budget != null ? budget : '';
+        card.dataset.preference_type = preference_type || '';
+        card.dataset.num_travelers = num_travelers;
+        card.dataset.hotel_type = hotel_type;
+        card.dataset.hotel_nights = hotel_nights;
+        optionsList.appendChild(card);
+      });
+
+      if (!optionsWithSelectedHotel || optionsWithSelectedHotel.length === 0) {
+        optionsList.innerHTML = '<div class="section-empty">No route options found for this combination. Try another date, city pair, or transport mode.</div>';
+      }
+
+      optionsList.querySelectorAll('.btn-select-review').forEach(btn => {
+        btn.addEventListener('click', () => goToReview(btn.closest('.option-card')));
+      });
+      optionsList.querySelectorAll('.btn-save-option').forEach(btn => {
+        btn.addEventListener('click', () => saveItineraryFromCard(btn.closest('.option-card')));
+      });
+
+      lastPlanData = {
+        transport_choice,
+        options: optionsWithSelectedHotel,
+        source,
+        destination,
+        travel_date,
+        budget,
+        preference_type,
+        num_travelers,
+        hotel_type,
+        hotel_nights,
+        selected_hotel
+      };
+      renderMap(source, destination);
+      loadEvents(destination);
+      loadRealTimeFlights(optionsWithSelectedHotel, transport_choice);
+      loadFuelCostIfCar(optionsWithSelectedHotel, transport_choice);
+      notify('Trip options loaded.', 'success');
+    } catch (err) {
+      optionsList.innerHTML = '<p class="auth-error">' + (err.message || 'Failed to load options') + '</p>';
+      notify(err.message || 'Failed to load options', 'error');
+    } finally {
+      setButtonLoading(submitBtn, '', false);
+    }
+  });
+
+  function goToReview(card) {
+    const opt = JSON.parse(card.dataset.option || '{}');
+    planState = {
+      source: card.dataset.source,
+      destination: card.dataset.destination,
+      travel_date: card.dataset.travel_date || null,
+      budget: card.dataset.budget ? parseFloat(card.dataset.budget) : null,
+      preference_type: card.dataset.preference_type || null,
+      num_travelers: parseInt(card.dataset.num_travelers, 10) || 1,
+      selected_option: opt
+    };
+
+    // User requested flow: User Selects Option -> Enter Preferences -> OpenAI Generates Itinerary -> Show Itinerary
+    // So we invoke the Itinerary Modal here before showing the review page.
+    // If the itinerary is already generated (e.g. they came back), we can skip.
+    if (!planState.itinerary) {
+      showItineraryModal(); // This modal's submit will generate itinerary and then show Review/Results
+    } else {
+      showPage('review');
+    }
+  }
+
+  // PDF Download Logic
+  window.downloadTripPDF = async function () {
+    if (!planState) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(22);
+    doc.text(`Trip to ${planState.destination}`, 20, 20);
+
+    doc.setFontSize(12);
+    doc.text(`Source: ${planState.source}`, 20, 30);
+    doc.text(`Date: ${planState.travel_date || 'TBD'}`, 20, 36);
+    doc.text(`Travelers: ${planState.num_travelers}`, 20, 42);
+
+    const opt = planState.selected_option;
+    const cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+    doc.text(`Total Cost: ${cost.toFixed(2)} INR`, 20, 52);
+
+    let y = 65;
+    doc.setFontSize(16);
+    doc.text('Transport', 20, y);
+    y += 10;
+    doc.setFontSize(12);
+    (opt.legs || []).forEach(leg => {
+      doc.text(`- ${leg.modeName} (${leg.duration_minutes}m): ${leg.estimated_cost} INR`, 20, y);
+      y += 8;
+    });
+
+    if (planState.itinerary) {
+      y += 10;
+      doc.setFontSize(16);
+      doc.text('Itinerary', 20, y);
+      y += 10;
+      doc.setFontSize(10);
+
+      planState.itinerary.forEach(day => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFont(undefined, 'bold');
+        doc.text(`Day ${day.day}`, 20, y);
+        y += 6;
+        doc.setFont(undefined, 'normal');
+        day.activities.forEach(act => {
+          if (y > 270) { doc.addPage(); y = 20; }
+          doc.text(`${act.time}: ${act.title} (${act.type})`, 25, y);
+          y += 6;
+        });
+        y += 4;
+      });
+    }
+
+    doc.save('my-trip.pdf');
+  };
+
+  document.getElementById('btnDownloadTrip')?.addEventListener('click', window.downloadTripPDF);
+
+  function renderReviewSummary() {
+    const el = document.getElementById('reviewSummary');
+    if (!el || !planState) return;
+    const opt = planState.selected_option;
+    const cost = opt.total_cost != null ? opt.total_cost : (opt.total_with_hotel != null ? opt.total_with_hotel : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0));
+    const modes = (opt.modes || opt.legs?.map(l => l.modeName || l.mode) || []).join(' → ');
+    const hotelLine = opt.hotel
+      ? `<div class="meta">Stay: ${opt.hotel.name} (${opt.hotel.total_nights} night(s)) · ₹${safeNum(opt.hotel.price_per_night, 0).toLocaleString('en-IN')}/night · Total ₹${safeNum(opt.hotel.total_cost, 0).toLocaleString('en-IN')}</div>`
+      : '';
+    el.innerHTML = `
+      <div class="route">${planState.source} → ${planState.destination}</div>
+      <div class="meta">Travel date: ${planState.travel_date || '—'} · Travelers: ${planState.num_travelers}</div>
+      <div class="meta">${modes}</div>
+      ${hotelLine}
+      <div class="meta" style="margin-top:0.5rem; font-weight:600;">Total: ₹${(cost || 0).toFixed(2)}</div>
+    `;
+
+    if (planState.itinerary) {
+      let itHtml = '<div style="margin-top:1rem; border-top:1px solid #eee; padding-top:1rem;"><strong>Itinerary Preview</strong></div>';
+      planState.itinerary.forEach(day => {
+        itHtml += `<div style="margin-top:0.5rem;"><strong>Day ${day.day}</strong>: ${day.activities.map(a => a.title).join(', ')}</div>`;
+      });
+      el.innerHTML += itHtml;
+    }
+  }
+
+  document.getElementById('btnProceedPayment')?.addEventListener('click', () => showPage('payment'));
+
+  document.getElementById('formPayment')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const payBtn = form.querySelector('button[type="submit"]');
+    const name_on_card = form.name_on_card?.value?.trim();
+    const card_number = form.card_number?.value?.trim();
+    const expiry = form.expiry?.value?.trim();
+    const cvv = form.cvv?.value?.trim();
+    if (!planState) { notify('Session expired. Please plan again.', 'error'); showPage('plan'); return; }
+    setButtonLoading(payBtn, 'Processing payment…', true);
+    try {
+      const pay = await fetchJSON(API + '/travel/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_number, expiry, cvv, name_on_card })
+      });
+      const opt = planState.selected_option;
+      const total_cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+      const confirm = await fetchJSON(API + '/travel/confirm-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          source: planState.source,
+          destination: planState.destination,
+          travel_date: planState.travel_date,
+          budget: planState.budget,
+          preference_type: planState.preference_type,
+          num_travelers: planState.num_travelers,
+          selected_option: planState.selected_option,
+          total_cost,
+          payment_ref: pay.payment_ref
+        })
+      });
+      planState.booking_id = confirm.booking_id;
+      planState.payment_ref = pay.payment_ref;
+      showPage('confirmation');
+      notify('Payment successful and booking confirmed.', 'success');
+    } catch (err) {
+      notify(err.message || 'Payment or booking failed', 'error');
+    } finally {
+      setButtonLoading(payBtn, '', false);
+    }
+  });
+
+  function renderConfirmation() {
+    const el = document.getElementById('confirmationDetails');
+    if (!el || !planState) return;
+    const opt = planState.selected_option;
+    const cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+    el.innerHTML = `
+      <div class="route">${planState.source} → ${planState.destination}</div>
+      <div class="meta">Travel date: ${planState.travel_date || '—'} · Travelers: ${planState.num_travelers}</div>
+      <div class="meta">Total paid: ₹${cost.toFixed(2)}</div>
+      <div class="meta" style="margin-top:0.5rem;">Booking #${planState.booking_id || '—'} · Payment ref: ${planState.payment_ref || '—'}</div>
+      <p style="margin-top:0.75rem; color: var(--success);">Data saved for future learning.</p>
+    `;
+  }
+
+  async function getPreferencesForPlan() {
+    try {
+      const p = await fetchJSON(API + '/preferences');
+      return { preferred_modes: p.preferred_modes, budget_max: p.budget_max };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  async function saveItineraryFromCard(card) {
+    const saveBtn = card?.querySelector('.btn-save-option');
+    const opt = JSON.parse(card.dataset.option || '{}');
+    const source = card.dataset.source;
+    const destination = card.dataset.destination;
+    const start_date = card.dataset.travel_date || card.dataset.start_date;
+    const end_date = card.dataset.end_date;
+    const total_cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+    const total_duration = opt.total_duration_minutes != null ? opt.total_duration_minutes : (opt.legs || []).reduce((s, l) => s + (l.duration_minutes || 0), 0);
+    const total_distance_km = opt.total_distance_km != null ? opt.total_distance_km : (opt.legs || []).reduce((s, l) => s + (l.distance_km || 0), 0);
+    try {
+      setButtonLoading(saveBtn, 'Saving…', true);
+      await fetchJSON(API + '/travel/save-itinerary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source,
+          destination,
+          start_date: start_date || null,
+          end_date: end_date || null,
+          selected_option: opt,
+          total_distance_km,
+          total_duration_minutes: total_duration,
+          estimated_cost: total_cost,
+          itinerary_json: opt
+        })
+      });
+      notify('Itinerary saved.', 'success');
+    } catch (e) {
+      if (e.message === 'Authentication required') notify('Please log in to save itineraries.', 'error');
+      else notify(e.message || 'Failed to save', 'error');
+    } finally {
+      setButtonLoading(saveBtn, '', false);
+    }
+  }
+
+  function geocodeCity(name) {
+    const coords = {
+      'new york': [40.7128, -74.006],
+      'los angeles': [34.0522, -118.2437],
+      'chicago': [41.8781, -87.6298],
+      'miami': [25.7617, -80.1918],
+      'boston': [42.3601, -71.0589],
+      'san francisco': [37.7749, -122.4194],
+      'las vegas': [36.1699, -115.1398],
+      'delhi': [28.6139, 77.2090],
+      'mumbai': [19.0760, 72.8777],
+      'bangalore': [12.9716, 77.5946]
+    };
+    const key = (name || '').toLowerCase().trim();
+    return coords[key] || [39.5 + (key.length % 10) * 0.5, -98 + (key.length % 15)];
+  }
+
+  function renderMap(source, destination) {
+    const container = document.getElementById('map');
+    if (!container) return;
+    container.innerHTML = '';
+    const src = geocodeCity(source);
+    const dst = geocodeCity(destination);
+    if (googleMapsApiKey && window.google && window.google.maps) {
+      const center = { lat: (src[0] + dst[0]) / 2, lng: (src[1] + dst[1]) / 2 };
+      googleMapInstance = new google.maps.Map(container, {
+        zoom: 5,
+        center,
+        mapTypeId: 'roadmap'
+      });
+      new google.maps.Marker({ position: { lat: src[0], lng: src[1] }, map: googleMapInstance, title: source });
+      new google.maps.Marker({ position: { lat: dst[0], lng: dst[1] }, map: googleMapInstance, title: destination });
+      const path = new google.maps.Polyline({
+        path: [{ lat: src[0], lng: src[1] }, { lat: dst[0], lng: dst[1] }],
+        strokeColor: '#3b82f6',
+        strokeWeight: 3,
+        map: googleMapInstance
+      });
+      const bounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(src[0], src[1]),
+        new google.maps.LatLng(dst[0], dst[1])
+      );
+      googleMapInstance.fitBounds(bounds, 40);
+    } else {
+      const center = [(src[0] + dst[0]) / 2, (src[1] + dst[1]) / 2];
+      const bounds = [src, dst];
+      map = L.map(container).setView(center, 4);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+      mapMarkers.forEach(m => m.remove());
+      mapMarkers = [];
+      const m1 = L.marker(src).addTo(map).bindPopup(source);
+      const m2 = L.marker(dst).addTo(map).bindPopup(destination);
+      mapMarkers.push(m1, m2);
+      L.polyline([src, dst], { color: '#3b82f6', weight: 3 }).addTo(map);
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+  }
+
+  function loadRealTimeFlights(options, transportChoice) {
+    const section = document.getElementById('realTimeFlightsSection');
+    const list = document.getElementById('realTimeFlightsList');
+    if (!section || !list) return;
+    const hasFlight = transportChoice && transportChoice.includes('flight');
+    const flightOpts = (options || []).filter(o => o.from_api || ((o.modes || []).includes('flight')));
+    flightRealtimeOptions = flightOpts;
+    if (!hasFlight && flightOpts.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    if (flightOpts.length === 0) {
+      list.innerHTML = '<div class="section-empty">No real-time flight data for this search yet. You can still continue with recommended route options above.</div>';
+      return;
+    }
+    list.innerHTML = flightOpts.map((o, idx) => {
+      const price = o.total_cost != null ? o.total_cost : (o.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+      const carrier = o.carrier || (o.legs && o.legs[0] && o.legs[0].modeName) || 'Flight';
+      const durationMins = o.total_duration_minutes || (o.legs || []).reduce((s, l) => s + (l.duration_minutes || 0), 0) || 120;
+      const flightRef = o.quote_id || o.id || `FL-${1000 + idx}`;
+      const depDateText = o.outbound ? new Date(o.outbound).toLocaleDateString() : 'Not provided';
+      const carrierLabel = carrier && carrier.trim() ? carrier : 'Airline info unavailable';
+      const flightTypeText = o.direct !== false ? 'Direct' : '1 Stop';
+
+      // Generate realistic times
+      const now = new Date();
+      // Start between 6 AM and 8 PM
+      const startHour = 6 + Math.floor(Math.random() * 14);
+      const startMin = Math.floor(Math.random() * 60);
+      const endDate = new Date(now);
+      endDate.setHours(startHour, startMin + durationMins, 0, 0);
+
+      const depTime = `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}`;
+      const arrTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+      const hours = Math.floor(durationMins / 60);
+      const mins = durationMins % 60;
+      const arrDateText = o.outbound
+        ? new Date(new Date(o.outbound).getTime() + durationMins * 60 * 1000).toLocaleDateString()
+        : 'Not provided';
+      const baggageText = 'Cabin 7kg / Check-in 15kg (placeholder)';
+      const refundText = 'Refundable policy: TBD (placeholder)';
+
+      const sourceCode = ((planState && planState.source) || (lastPlanData && lastPlanData.source) || 'SRC').substring(0, 3).toUpperCase();
+      const destCode = ((planState && planState.destination) || (lastPlanData && lastPlanData.destination) || 'DST').substring(0, 3).toUpperCase();
+
+      return `
+        <div class="flight-card card">
+          <div class="flight-main">
+            <div class="flight-info">
+              <div class="airline-logo">${carrierLabel.split(' ').map(w => w[0]).join('').substring(0, 2)}</div>
+              <div class="flight-route">
+                <div class="flight-time">
+                  <span class="time">${depTime}</span>
+                  <span class="airport">${sourceCode}</span>
+                </div>
+                <div class="flight-duration">
+                  <span class="duration-text">${hours}h ${mins}m</span>
+                  <div class="duration-line"></div>
+                  <span class="duration-text">${o.direct !== false ? 'Direct' : '1 Stop'}</span>
+                </div>
+                <div class="flight-time">
+                  <span class="time">${arrTime}</span>
+                  <span class="airport">${destCode}</span>
+                </div>
+              </div>
+            </div>
+            <div class="flight-price-section">
+              ${o.from_api ? '<span class="deal-tag">Live Deal</span>' : ''}
+              <span class="price-tag">₹${(price || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+              <div class="flight-meta-grid">
+                <div><span class="meta-k">Airline:</span> <span class="meta-v">${carrierLabel}</span></div>
+                <div><span class="meta-k">Flight Ref:</span> <span class="meta-v">${flightRef}</span></div>
+                <div><span class="meta-k">Type:</span> <span class="meta-v">${flightTypeText}</span></div>
+                <div><span class="meta-k">Departure:</span> <span class="meta-v">${depDateText}</span></div>
+                <div><span class="meta-k">Arrival:</span> <span class="meta-v">${arrDateText} ${arrTime}</span></div>
+                <div><span class="meta-k">Duration:</span> <span class="meta-v">${hours}h ${mins}m</span></div>
+                <div><span class="meta-k">Baggage:</span> <span class="meta-v">${baggageText}</span></div>
+                <div><span class="meta-k">Refundable:</span> <span class="meta-v">${refundText}</span></div>
+              </div>
+              <div class="flight-actions">
+                <button type="button" class="btn btn-primary btn-select-flight" onclick="selectFlight(${idx})">Select & Build Itinerary</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function loadFuelCostIfCar(options, transportChoice) {
+    const section = document.getElementById('fuelCostSection');
+    const details = document.getElementById('fuelCostDetails');
+    if (!section || !details) return;
+    if (!transportChoice || !transportChoice.includes('car')) {
+      section.classList.add('hidden');
+      return;
+    }
+    const carOpt = (options || []).find(o => (o.modes || []).includes('car'));
+    const distanceKm = carOpt && (carOpt.total_distance_km != null ? carOpt.total_distance_km : (carOpt.legs || []).reduce((s, l) => s + (l.distance_km || 0), 0)) || 0;
+    section.classList.remove('hidden');
+    details.innerHTML = '<p class="loading">Loading fuel price…</p>';
+    try {
+      const data = await fetchJSON(API + '/fuel?country=IN');
+      const petrolPerL = data.petrol != null ? data.petrol : 105;
+      const kmPerL = 12;
+      const litersNeeded = distanceKm / kmPerL;
+      const fuelCost = Math.round(litersNeeded * petrolPerL * 100) / 100;
+      details.innerHTML = `
+        <p><strong>Petrol price (real-time):</strong> ₹${petrolPerL.toFixed(2)}/L ${data.simulated ? '(est.)' : ''}</p>
+        <p><strong>Distance:</strong> ${distanceKm.toFixed(0)} km · <strong>Est. fuel (${kmPerL} km/L):</strong> ${litersNeeded.toFixed(1)} L</p>
+        <p><strong>Est. fuel cost:</strong> ₹${fuelCost.toFixed(2)}</p>
+      `;
+    } catch (_) {
+      details.innerHTML = '<div class="section-empty">Could not load fuel price. Using fallback estimate: ₹105/L.</div>';
+    }
+  }
+
+  async function loadEvents(destination) {
+    const list = document.getElementById('eventsList');
+    if (!list) return;
+    try {
+      const { events } = await fetchJSON(API + '/events?city=' + encodeURIComponent(destination));
+      list.innerHTML = events.length
+        ? events.map(e => `
+            <div class="event-card">
+              <strong>${e.name}</strong>
+              <span>${e.type} · ${e.venue} · ${e.date}</span>
+            </div>
+          `).join('')
+        : '<div class="section-empty">No local events found for this city right now.</div>';
+    } catch (_) {
+      list.innerHTML = '<div class="section-empty">Could not load destination events at the moment.</div>';
+    }
+  }
+
+  async function loadHistory() {
+    const list = document.getElementById('historyList');
+    const empty = document.getElementById('historyEmpty');
+    try {
+      const { history } = await fetchJSON(API + '/history');
+      if (!history || history.length === 0) {
+        list.innerHTML = '';
+        if (empty) empty.classList.remove('hidden');
+        return;
+      }
+      if (empty) empty.classList.add('hidden');
+      list.innerHTML = history.map(h => `
+        <div class="history-item">
+          <div class="route">${h.source} → ${h.destination}</div>
+          <div class="meta">
+            ${h.start_date || ''}
+            ${h.distance_km != null ? ' · ' + h.distance_km.toFixed(0) + ' km' : ''}
+            ${h.duration_minutes != null ? ' · ' + Math.floor(h.duration_minutes / 60) + 'h' : ''}
+            ${h.estimated_cost != null ? ' · ₹' + h.estimated_cost.toFixed(2) : ''}
+          </div>
+        </div>
+      `).join('');
+    } catch (_) {
+      list.innerHTML = '';
+      if (empty) empty.classList.remove('hidden');
+      if (empty) empty.textContent = 'Could not load history right now. Please refresh and try again.';
+    }
+  }
+
+  // City autocomplete (source/destination/hero search)
+  const CITY_SUGGESTIONS = [
+    'Delhi',
+    'Mumbai',
+    'Bangalore',
+    'Chennai',
+    'Hyderabad',
+    'Kolkata',
+    'Pune',
+    'Ahmedabad',
+    'Jaipur',
+    'Goa',
+    'New York',
+    'Los Angeles',
+    'Chicago',
+    'Miami',
+    'Boston',
+    'San Francisco',
+    'Las Vegas',
+    'London',
+    'Paris',
+    'Singapore',
+    'Dubai'
+  ];
+
+  function attachCityAutocomplete(inputEl) {
+    if (!inputEl) return;
+    const parent = inputEl.closest('.form-row') || inputEl.parentElement;
+    if (!parent) return;
+    parent.classList.add('autocomplete-wrap');
+
+    const listEl = document.createElement('div');
+    listEl.className = 'city-suggest-list hidden';
+    parent.appendChild(listEl);
+
+    let activeIndex = -1;
+    let currentItems = [];
+
+    function hideList() {
+      listEl.classList.add('hidden');
+      listEl.innerHTML = '';
+      activeIndex = -1;
+      currentItems = [];
+    }
+
+    function chooseValue(value) {
+      inputEl.value = value;
+      hideList();
+    }
+
+    function renderList(items) {
+      currentItems = items;
+      activeIndex = -1;
+      if (!items.length) {
+        hideList();
+        return;
+      }
+      listEl.innerHTML = items.map(city => `<button type="button" class="city-suggest-item">${city}</button>`).join('');
+      listEl.classList.remove('hidden');
+      listEl.querySelectorAll('.city-suggest-item').forEach((btn, index) => {
+        btn.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          chooseValue(items[index]);
+        });
+      });
+    }
+
+    function updateActiveItem() {
+      const buttons = listEl.querySelectorAll('.city-suggest-item');
+      buttons.forEach((btn, i) => btn.classList.toggle('active', i === activeIndex));
+    }
+
+    inputEl.addEventListener('input', () => {
+      if (inputEl.dataset.googlePlacesBound === '1') {
+        hideList();
+        return;
+      }
+      const q = inputEl.value.trim().toLowerCase();
+      if (!q) {
+        hideList();
+        return;
+      }
+      const matches = CITY_SUGGESTIONS
+        .filter(city => city.toLowerCase().includes(q))
+        .slice(0, 8);
+      renderList(matches);
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (inputEl.dataset.googlePlacesBound === '1') return;
+      if (listEl.classList.contains('hidden')) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = Math.min(activeIndex + 1, currentItems.length - 1);
+        updateActiveItem();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = Math.max(activeIndex - 1, 0);
+        updateActiveItem();
+      } else if (e.key === 'Enter') {
+        if (activeIndex >= 0 && currentItems[activeIndex]) {
+          e.preventDefault();
+          chooseValue(currentItems[activeIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        hideList();
+      }
+    });
+
+    inputEl.addEventListener('blur', () => {
+      setTimeout(hideList, 120);
+    });
+
+    inputEl.addEventListener('focus', () => {
+      if (inputEl.dataset.googlePlacesBound === '1') {
+        hideList();
+        return;
+      }
+      if (inputEl.value.trim()) {
+        const q = inputEl.value.trim().toLowerCase();
+        const matches = CITY_SUGGESTIONS
+          .filter(city => city.toLowerCase().includes(q))
+          .slice(0, 8);
+        renderList(matches);
+      }
+    });
+  }
+
+  function enableGooglePlacesAutocomplete() {
+    if (!(window.google && window.google.maps && window.google.maps.places)) return;
+    const fields = [
+      document.getElementById('planSource'),
+      document.getElementById('planDestination'),
+      document.getElementById('heroSearchInput')
+    ].filter(Boolean);
+
+    fields.forEach((inputEl) => {
+      if (!inputEl || inputEl.dataset.googlePlacesBound === '1') return;
+      const ac = new window.google.maps.places.Autocomplete(inputEl, {
+        types: ['(cities)'],
+        fields: ['formatted_address', 'name']
+      });
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace();
+        const value = (p && (p.formatted_address || p.name)) || inputEl.value;
+        if (value) inputEl.value = value;
+      });
+      inputEl.dataset.googlePlacesBound = '1';
+    });
+  }
+
+  window.initGooglePlacesAutocomplete = function () {
+    enableGooglePlacesAutocomplete();
+  };
+
+  // Hero Search Logic (New)
+  const heroSearchBtn = document.getElementById('heroSearchBtn');
+  const heroSearchInput = document.getElementById('heroSearchInput');
+
+  attachCityAutocomplete(document.getElementById('planSource'));
+  attachCityAutocomplete(document.getElementById('planDestination'));
+  attachCityAutocomplete(heroSearchInput);
+
+  if (heroSearchBtn && heroSearchInput) {
+    heroSearchBtn.addEventListener('click', () => {
+      const destination = heroSearchInput.value.trim();
+      if (destination) {
+        // Switch to plan tab and pre-fill destination if possible, or just start planning
+        showPage('plan');
+        const planDestination = document.getElementById('planDestination');
+        if (planDestination) planDestination.value = destination;
+      } else {
+        showPage('plan');
+      }
+    });
+  }
+
+  async function loadPreferences() {
+    try {
+      const p = await fetchJSON(API + '/preferences');
+      document.querySelectorAll('#formPreferences input[name="mode"]').forEach(cb => {
+        cb.checked = (p.preferred_modes || []).includes(cb.value);
+      });
+      const min = document.getElementById('prefBudgetMin');
+      const max = document.getElementById('prefBudgetMax');
+      if (min) min.value = p.budget_min ?? '';
+      if (max) max.value = p.budget_max ?? '';
+    } catch (_) { }
+  }
+
+  document.getElementById('formPreferences')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const saveBtn = form.querySelector('button[type="submit"]');
+    const preferred_modes = Array.from(form.querySelectorAll('input[name="mode"]:checked')).map(c => c.value);
+    const budget_min = form.budget_min?.value ? parseFloat(form.budget_min.value) : null;
+    const budget_max = form.budget_max?.value ? parseFloat(form.budget_max.value) : null;
+    try {
+      setButtonLoading(saveBtn, 'Saving…', true);
+      await fetchJSON(API + '/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferred_modes, budget_min, budget_max })
+      });
+      notify('Preferences saved.', 'success');
+    } catch (err) {
+      notify(err.message || 'Failed to save preferences', 'error');
+    } finally {
+      setButtonLoading(saveBtn, '', false);
+    }
+  });
+
+  // Settings Logic
+  const settingsModal = document.getElementById('settingsModal');
+  const navSettings = document.getElementById('navSettings');
+  const closeSettings = document.getElementById('closeSettings');
+  const formSettings = document.getElementById('formSettings');
+
+  if (navSettings) {
+    navSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (settingsModal) settingsModal.classList.remove('hidden');
+    });
+  }
+
+  if (closeSettings) {
+    closeSettings.addEventListener('click', () => {
+      if (settingsModal) settingsModal.classList.add('hidden');
+    });
+  }
+
+  if (formSettings) {
+    formSettings.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn = formSettings.querySelector('button[type="submit"]');
+      const rapidApiKey = formSettings.rapidApiKey.value.trim();
+      const googleMapsApiKey = formSettings.googleMapsApiKey.value.trim();
+
+      if (!rapidApiKey && !googleMapsApiKey) return;
+
+      try {
+        setButtonLoading(saveBtn, 'Saving…', true);
+        await fetchJSON(API + '/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rapidApiKey, googleMapsApiKey })
+        });
+        notify('Settings saved. Reloading…', 'success');
+        window.location.reload();
+      } catch (err) {
+        notify('Failed to save settings.', 'error');
+      } finally {
+        setButtonLoading(saveBtn, '', false);
+      }
+    });
+    heroSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        heroSearchBtn.click();
+      }
+    });
+  }
+
+  // Itinerary Logic
+  const itineraryModal = document.getElementById('itineraryModal');
+  const formItinerary = document.getElementById('formItinerary');
+  const itinerarySection = document.getElementById('itinerarySection');
+  const itineraryTimeline = document.getElementById('itineraryTimeline');
+  const closeItinerary = document.getElementById('closeItinerary');
+  const btnRecalculateItinerary = document.getElementById('btnRecalculateItinerary');
+
+  function showItineraryModal() {
+    if (itineraryModal) itineraryModal.classList.remove('hidden');
+  }
+
+  if (closeItinerary) {
+    closeItinerary.addEventListener('click', () => {
+      if (itineraryModal) itineraryModal.classList.add('hidden');
+    });
+  }
+
+  if (btnRecalculateItinerary) {
+    btnRecalculateItinerary.addEventListener('click', showItineraryModal);
+  }
+
+  // Generate itinerary from modal form
+  if (formItinerary) {
+    formItinerary.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(formItinerary);
+      const days = Math.max(1, parseInt(fd.get('days') || '3', 10) || 3);
+      const interests = Array.from(fd.getAll('interest'));
+      const destination = planState?.destination;
+      const submitBtn = formItinerary.querySelector('button[type="submit"]');
+
+      if (!destination) {
+        notify('Please select a destination first.', 'error');
+        return;
+      }
+      if (!submitBtn) return;
+
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = 'Generating...';
+      submitBtn.disabled = true;
+
+      try {
+        const { itinerary } = await fetchJSON(API + '/travel/itinerary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            destination,
+            days,
+            interests,
+            context: `Budget: ${planState?.budget}, Style: ${planState?.preference_type}`
+          })
+        });
+
+        planState.itinerary = itinerary;
+        renderItinerary(itinerary);
+        if (itineraryModal) itineraryModal.classList.add('hidden');
+        showPage('review');
+        renderReviewSummary();
+      } catch (err) {
+        notify('Failed to generate itinerary: ' + err.message, 'error');
+      } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+  }
+
+  function renderItinerary(itinerary) {
+    if (!itineraryTimeline) return;
+    itineraryTimeline.innerHTML = itinerary.map(day => `
+      <div class="day-plan">
+        <div class="day-header">Day ${day.day}</div>
+        ${day.activities.map(act => `
+          <div class="activity-item">
+            <span class="activity-time">${act.time}</span>
+            <div class="activity-content">
+              <span class="activity-title">${act.title}</span>
+              <span class="activity-tag">${act.type}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  }
+
+  // Hook into flight selection to trigger itinerary with selected option context.
+  window.selectFlight = function (index) {
+    const original = flightRealtimeOptions[Number(index)];
+    const opt = original ? { ...original } : null;
+    if (!opt || !lastPlanData) {
+      notify('Please generate route options first.', 'error');
+      return;
+    }
+    const selectedHotelDetails = selectedHotelForPricing() || lastPlanData.selected_hotel || null;
+    if (selectedHotelDetails) {
+      const current = opt.total_cost != null ? safeNum(opt.total_cost, 0) : safeNum(opt.total_with_hotel, 0);
+      const existingHotelCost = opt.hotel && opt.hotel.total_cost != null ? safeNum(opt.hotel.total_cost, 0) : 0;
+      const transportOnly = Math.max(0, current - existingHotelCost);
+      opt.hotel = selectedHotelDetails;
+      opt.total_cost = transportOnly + safeNum(selectedHotelDetails.total_cost, 0);
+      opt.total_with_hotel = opt.total_cost;
+    }
+    planState = {
+      source: lastPlanData.source,
+      destination: lastPlanData.destination,
+      travel_date: lastPlanData.travel_date || null,
+      budget: lastPlanData.budget != null ? parseFloat(lastPlanData.budget) : null,
+      preference_type: lastPlanData.preference_type || null,
+      num_travelers: parseInt(lastPlanData.num_travelers, 10) || 1,
+      selected_option: opt
+    };
+    showItineraryModal();
+  };
+
+  (async function initConfig() {
+    try {
+      const config = await fetchJSON(API + '/config');
+      if (config.googleMapsApiKey) {
+        googleMapsApiKey = config.googleMapsApiKey;
+        const script = document.createElement('script');
+        script.src = 'https://maps.googleapis.com/maps/api/js?key=' + config.googleMapsApiKey + '&libraries=places&callback=initGooglePlacesAutocomplete';
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => { };
+        document.head.appendChild(script);
+      }
+    } catch (_) { }
+  })();
+
+  checkAuth().then(user => {
+    if (user) {
+      showPage('plan');
+      return;
+    }
+    showPage('landing');
+  });
+})();

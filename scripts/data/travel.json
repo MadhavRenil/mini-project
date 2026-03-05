@@ -1,0 +1,42 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "u2304029@rajagiri.edu.in",
+      "password_hash": "$2a$10$U.HfpTsEA4pNgYDxKjpHJ.T9po9mMmI/U5zPK8LlULZrJ/3f.Lwai",
+      "name": "Emi",
+      "role": "user",
+      "created_at": "2026-02-03T03:59:03.725Z"
+    }
+  ],
+  "travel_history": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "source": "Bangalore",
+      "destination": "Kochi",
+      "start_date": "2026-02-05",
+      "end_date": "2026-12-05",
+      "modes": "[\"flight\",\"car\"]",
+      "distance_km": 1384,
+      "duration_minutes": 286,
+      "estimated_cost": 203.85,
+      "itinerary_json": "{\"id\":\"flight-car\",\"legs\":[{\"mode\":\"flight\",\"modeName\":\"Flight\",\"distance_km\":1176.4,\"duration_minutes\":88,\"estimated_cost\":177.69},{\"mode\":\"car\",\"modeName\":\"Car\",\"distance_km\":207.6,\"duration_minutes\":138,\"estimated_cost\":26.16}],\"total_distance_km\":1384,\"total_duration_minutes\":286,\"total_cost\":203.85,\"modes\":[\"flight\",\"car\"],\"score\":115}",
+      "created_at": "2026-02-03T04:00:07.180Z"
+    }
+  ],
+  "user_preferences": [
+    {
+      "user_id": 1,
+      "preferred_modes": "[\"car\"]",
+      "budget_min": 200,
+      "budget_max": 500,
+      "interests": "[]",
+      "updated_at": "2026-02-03T04:00:29.524Z"
+    }
+  ],
+  "_seq": {
+    "users": 1,
+    "travel_history": 1
+  }
+}

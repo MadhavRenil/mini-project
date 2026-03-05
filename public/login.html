@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | Voyagr</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <a href="/" class="logo">Voyag</a>
+    <section class="card">
+      <h1>Welcome back</h1>
+      <p>Log in to access your saved trips and preferences.</p>
+      <form id="formLogin" class="auth-form">
+        <input type="email" name="email" placeholder="Email" autocomplete="email" required>
+        <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit" class="btn btn-primary" id="btnLoginSubmit">Log In</button>
+      </form>
+      <p id="loginError" class="auth-error"></p>
+      <div class="auth-links">New here? <a href="/register">Create an account</a></div>
+    </section>
+  </main>
+  <script src="/js/auth.js"></script>
+</body>
+</html>

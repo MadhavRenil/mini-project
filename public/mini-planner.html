@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Travel Planner (Mini)</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            text-align: center;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        input,
+        button {
+            padding: 10px;
+            margin: 10px 0;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .result {
+            text-align: left;
+            background: #f4f4f4;
+            padding: 15px;
+            white-space: pre-wrap;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>🌍 AI Generated Travel Planner</h2>
+
+        <!-- Step 1: Input Form -->
+        <div id="step1">
+            <input type="text" id="name" placeholder="Your Name" required>
+            <input type="text" id="destination" placeholder="Destination" required>
+            <input type="number" id="budget" placeholder="Budget (INR)" required>
+            <button onclick="generatePlan()">Generate Plan</button>
+        </div>
+
+        <!-- Step 2: Results & Payment -->
+        <div id="step2" class="hidden">
+            <h3>✈ Estimated Cost</h3>
+            <p>Flight: ₹<span id="flightCost"></span></p>
+            <p>Hotel: ₹<span id="hotelCost"></span></p>
+            <p><strong>Total: ₹<span id="totalCost"></span></strong></p>
+
+            <h3>🤖 AI Generated Itinerary</h3>
+            <div class="result" id="itineraryContent"></div>
+
+            <h3>💳 Dummy Payment</h3>
+            <input type="text" placeholder="Card Number" required>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" placeholder="Expiry Date" required>
+                <input type="text" placeholder="CVV" required>
+            </div>
+            <button onclick="payNow()">Pay Now</button>
+        </div>
+
+        <!-- Step 3: Success -->
+        <div id="step3" class="hidden">
+            <h2 style="color: #28a745;">✅ Payment Successful!</h2>
+            <p>Thank you <span id="successName"></span>.</p>
+            <p>Your trip to <span id="successDest"></span> has been confirmed.</p>
+            <button onclick="reset()">Plan Another Trip</button>
+        </div>
+    </div>
+
+    <script>
+        function generatePlan() {
+            const name = document.getElementById('name').value;
+            const dest = document.getElementById('destination').value;
+            const budget = document.getElementById('budget').value;
+
+            if (!name || !dest || !budget) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            // Simulated logic
+            const flight = Math.floor(Math.random() * (15000 - 4000 + 1)) + 4000;
+            const hotel = Math.floor(Math.random() * (12000 - 3000 + 1)) + 3000;
+
+            document.getElementById('flightCost').textContent = flight;
+            document.getElementById('hotelCost').textContent = hotel;
+            document.getElementById('totalCost').textContent = flight + hotel;
+
+            document.getElementById('itineraryContent').textContent = `
+Day 1:
+- Arrival at ${dest}
+- City exploration
+- Local food experience
+
+Day 2:
+- Visit famous attractions
+- Adventure activities
+- Shopping
+
+Day 3:
+- Relaxation & sightseeing
+- Cultural visit
+- Departure
+`;
+
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+        }
+
+        function payNow() {
+            document.getElementById('successName').textContent = document.getElementById('name').value;
+            document.getElementById('successDest').textContent = document.getElementById('destination').value;
+
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.remove('hidden');
+        }
+
+        function reset() {
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById('step1').classList.remove('hidden');
+            document.getElementById('name').value = '';
+            document.getElementById('destination').value = '';
+            document.getElementById('budget').value = '';
+        }
+    </script>
+
+</body>
+
+</html>

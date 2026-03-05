@@ -1,0 +1,135 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "u2304029@rajagiri.edu.in",
+      "password_hash": "$2a$10$G9fWWqLpSEftmEixUSGaleRvDhFJ4cAuwsBb650xb9kAcO0FW8JUG",
+      "name": "Emi",
+      "role": "user",
+      "created_at": "2026-02-17T03:20:05.174Z"
+    },
+    {
+      "id": 2,
+      "email": "madhavrenil@gmail.com",
+      "password_hash": "$2a$10$SK8HDqnqeYm0ngnBmdG23urg4x3nC7uN5/gehZBUAQULIEmL9ppRS",
+      "name": "madhav",
+      "role": "user",
+      "created_at": "2026-02-17T03:42:30.552Z"
+    },
+    {
+      "id": 3,
+      "email": "madhavrenil97@gmail.com",
+      "password_hash": "$2a$10$qetckU4vCWtwXaqCRwd8CuizY1rwOIb3c3t7RUngjyil.U.ZKOg1m",
+      "name": "madhav",
+      "role": "user",
+      "created_at": "2026-02-17T04:01:31.606Z"
+    },
+    {
+      "id": 4,
+      "email": "testuser1@example.com",
+      "password_hash": "$2a$10$8SYS00sXd1OIqb4hzknJ/ezsKpB6oCKk9HkAzJpezOHaVmdZqLaHi",
+      "name": "Test User",
+      "role": "user",
+      "created_at": "2026-03-04T19:52:35.286Z"
+    },
+    {
+      "id": 5,
+      "email": "ux1772654223@test.local",
+      "password_hash": "$2a$10$NDwheAzmaGOHpJaD7abm5.mHSvursnULc3Roh17GRpyR.6GhfGaOS",
+      "name": "UX Test",
+      "role": "user",
+      "created_at": "2026-03-04T19:57:03.217Z"
+    },
+    {
+      "id": 6,
+      "email": "123@gmail.com",
+      "password_hash": "$2a$10$g6bsR.eWrYg6FJLi8OTc3.EjFXsyvZYlVgEiVi3wQbPkg0fiWIp7e",
+      "name": "math",
+      "role": "user",
+      "created_at": "2026-03-04T19:58:10.241Z"
+    }
+  ],
+  "travel_history": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "source": "Bangalore",
+      "destination": "Kochi",
+      "start_date": "2025-12-03",
+      "end_date": "2025-12-03",
+      "modes": "[\"bus\"]",
+      "distance_km": 1511,
+      "duration_minutes": 1295,
+      "estimated_cost": 72.68,
+      "itinerary_json": "{\"id\":\"bus-direct\",\"legs\":[{\"mode\":\"bus\",\"modeName\":\"Bus\",\"distance_km\":1511,\"duration_minutes\":1295,\"estimated_cost\":72.68}],\"total_distance_km\":1511,\"total_duration_minutes\":1295,\"total_cost\":72.68,\"modes\":[\"bus\"],\"score\":110}",
+      "created_at": "2026-02-17T03:20:58.762Z"
+    },
+    {
+      "id": 2,
+      "user_id": 1,
+      "source": "Bangalore",
+      "destination": "Kochi",
+      "start_date": "2025-12-03",
+      "end_date": "2025-12-03",
+      "modes": "[\"flight\",\"car\"]",
+      "distance_km": 1511,
+      "duration_minutes": 307,
+      "estimated_cost": 222.25,
+      "itinerary_json": "{\"id\":\"flight-car\",\"legs\":[{\"mode\":\"flight\",\"modeName\":\"Flight\",\"distance_km\":1284.4,\"duration_minutes\":96,\"estimated_cost\":195.28},{\"mode\":\"car\",\"modeName\":\"Car\",\"distance_km\":226.7,\"duration_minutes\":151,\"estimated_cost\":26.97}],\"total_distance_km\":1511,\"total_duration_minutes\":307,\"total_cost\":222.25,\"modes\":[\"flight\",\"car\"],\"score\":110}",
+      "created_at": "2026-02-17T03:21:07.802Z"
+    }
+  ],
+  "user_preferences": [],
+  "_seq": {
+    "users": 6,
+    "travel_history": 2,
+    "bookings": 3
+  },
+  "bookings": [
+    {
+      "id": 1,
+      "user_id": null,
+      "source": "kochi",
+      "destination": "bangalore",
+      "travel_date": "2025-02-02",
+      "budget": 5000,
+      "preference_type": "luxury",
+      "num_travelers": 1,
+      "selected_option_json": "{\"id\":\"bus-direct\",\"legs\":[{\"mode\":\"bus\",\"modeName\":\"Bus\",\"distance_km\":1639,\"duration_minutes\":1405,\"estimated_cost\":79.06}],\"total_distance_km\":1639,\"total_duration_minutes\":1405,\"total_cost\":79.06,\"modes\":[\"bus\"],\"score\":110,\"num_travelers\":1}",
+      "total_cost": 79.06,
+      "payment_ref": "DEMO-1771299195050-ysxhzv",
+      "status": "confirmed",
+      "created_at": "2026-02-17T03:33:15.053Z"
+    },
+    {
+      "id": 2,
+      "user_id": null,
+      "source": "Delhi",
+      "destination": "Mumbai",
+      "travel_date": "2026-03-20",
+      "budget": null,
+      "preference_type": null,
+      "num_travelers": 2,
+      "selected_option_json": "{\"modes\":[\"flight\"],\"total_cost\":9999}",
+      "total_cost": 9999,
+      "payment_ref": "DEMO-REF",
+      "status": "confirmed",
+      "created_at": "2026-03-04T18:33:43.942Z"
+    },
+    {
+      "id": 3,
+      "user_id": null,
+      "source": "Kochi, Kerala, India",
+      "destination": "London, UK",
+      "travel_date": "2026-03-06",
+      "budget": null,
+      "preference_type": null,
+      "num_travelers": 1,
+      "selected_option_json": "{\"id\":\"flight-api-0\",\"legs\":[{\"mode\":\"flight\",\"modeName\":\"Indigo\",\"estimated_cost\":6310,\"duration_minutes\":174,\"distance_km\":2917}],\"total_cost\":14310,\"total_duration_minutes\":174,\"total_distance_km\":2917,\"modes\":[\"flight\"],\"from_api\":true,\"carrier\":\"Indigo\",\"outbound\":\"2026-03-04T19:48:13.242Z\",\"quote_id\":\"sim-11\",\"direct\":true,\"score\":115,\"num_travelers\":1,\"hotel\":{\"type\":\"midrange\",\"name\":\"Mid-range hotel\",\"price_per_night\":4000,\"total_nights\":2,\"total_cost\":8000},\"total_with_hotel\":14310}",
+      "total_cost": 14310,
+      "payment_ref": "DEMO-1772653719649-epdn61",
+      "status": "confirmed",
+      "created_at": "2026-03-04T19:48:39.653Z"
+    }
+  ]
+}

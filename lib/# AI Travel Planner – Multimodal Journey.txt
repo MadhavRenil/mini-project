@@ -1,0 +1,47 @@
+# AI Travel Planner – Multimodal Journey Planner
+
+[AI Travel Planner](http://localhost:3004/)
+[Plan Trip](http://localhost:3004)
+[My Trips](http://localhost:3004)
+[Preferences](http://localhost:3004)
+[Log in](http://localhost:3004)
+
+# Plan Smarter Trips
+Multimodal routes, AI recommendations, and local events — all in one place.
+
+## Plan Your Trip
+
+### Where are you going?
+
+### How do you want to travel?
+Choose one or more. We'll show real-time flight prices when available.
+
+### Where do you want to stay?
+
+### Trip style & budget
+✓ Real-time prices (Skyscanner)
+
+### Your options
+
+### ✈ Real-time flight options
+
+### 🏨 Real-time hotel prices at destination
+
+### ⛽ Fuel cost (real-time petrol price)
+
+### Route map
+
+### Events at destination
+
+## Review your trip
+[Change selection](http://localhost:3004)
+
+## Payment (demo)
+
+## Booking confirmed
+[Plan another trip](http://localhost:3004)
+
+## My travel history
+No trips saved yet. Plan a trip and save an itinerary.
+
+## My preferences
