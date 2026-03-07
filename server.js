@@ -11,6 +11,7 @@ const eventsRoutes = require('./routes/events');
 const configRoutes = require('./routes/config');
 const hotelsRoutes = require('./routes/hotels');
 const fuelRoutes = require('./routes/fuel');
+const mapsRoutes = require('./routes/maps');
 const { initDb } = require('./lib/db');
 
 initDb();
@@ -45,6 +46,7 @@ app.use('/api/events', eventsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/hotels', hotelsRoutes);
 app.use('/api/fuel', fuelRoutes);
+app.use('/api/maps', mapsRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -77,3 +79,4 @@ const server = app.listen(PORT, () => {
 server.on('error', (err) => {
   console.error('[server-error]', err.message);
 });
+
