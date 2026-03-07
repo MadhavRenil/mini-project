@@ -10,7 +10,6 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Google Maps loaded by app.js when GOOGLE_MAPS_API_KEY is set -->
@@ -239,7 +238,7 @@
         </div>
 
         <div id="planResults" class="results-section hidden">
-          <p id="realTimeBadge" class="real-time-badge hidden">✓ Real-time prices (Skyscanner)</p>
+          <p id="realTimeBadge" class="real-time-badge hidden">Real-time prices available</p>
           <h3>Your options</h3>
           <div id="optionsList" class="options-list"></div>
           <div id="realTimeFlightsSection" class="real-time-section hidden">
@@ -391,14 +390,13 @@
       <div class="modal-content card">
         <h3>Settings</h3>
         <p>Enter your API keys to enable live integrations.</p>
-        <p class="text-muted" style="font-size: 0.85rem;">Get a free key from <a
-            href="https://rapidapi.com/skyscanner-api-skyscanner-api-default/api/skyscanner-flight-search"
-            target="_blank">RapidAPI</a>.</p>
+        <p class="text-muted" style="font-size: 0.85rem;">Get a SerpApi key for Google Flights, hotels, and events,
+          and add RapidAPI only if you want the extra hotel or fuel fallbacks.</p>
         <p class="text-muted" style="font-size: 0.85rem; margin-top: 0.35rem;">
           Google setup:
-          enable <strong>Maps JavaScript API</strong> (required for map rendering with your
-          <code>GOOGLE_MAPS_API_KEY</code>). Optional for future upgrades: <strong>Places API</strong>,
-          <strong>Geocoding API</strong>, <strong>Directions API</strong>.
+          enable <strong>Maps JavaScript API</strong> and <strong>Places API</strong>, and turn on billing
+          for your <code>GOOGLE_MAPS_API_KEY</code>. Optional for future upgrades:
+          <strong>Geocoding API</strong> and <strong>Directions API</strong>.
         </p>
         <form id="formSettings">
           <div class="form-row">
@@ -406,7 +404,7 @@
             <input type="text" name="serpApiKey" placeholder="Paste SerpApi Key">
           </div>
           <div class="form-row">
-            <label>RapidAPI Key (Flights/Hotels)</label>
+            <label>RapidAPI Key (Hotels/Fuel)</label>
             <input type="text" name="rapidApiKey" placeholder="Paste RapidAPI Key">
           </div>
           <div class="form-row">
@@ -425,10 +423,9 @@
   <footer class="site-footer">
     <div class="container">Voyagr · AI-Assisted Multimodal Travel Planner &copy; 2026</div>
   </footer>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/js/app.js"></script>
 </body>
 
 </html>
+
 

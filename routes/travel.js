@@ -11,7 +11,7 @@ const { generateItinerary } = require('../lib/itinerary');
 
 const router = express.Router();
 
-// Step-by-step: transport choice, hotel type → Fetch APIs (Skyscanner) → AI → Route optimization → Itinerary + hotel cost
+// Step-by-step: transport choice, hotel type -> Fetch APIs (SerpApi) -> AI -> Route optimization -> Itinerary + hotel cost
 router.post('/plan', optionalAuth(), async (req, res) => {
   const {
     source,
@@ -229,3 +229,4 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
 });
 
 module.exports = router;
+

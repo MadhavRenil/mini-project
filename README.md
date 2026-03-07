@@ -8,18 +8,17 @@ Web-based intelligent platform to plan end-to-end travel using multiple transpor
 2. **Step 2 - How to travel**: User chooses Flight / Train / Bus / Car (one or more)
 3. **Step 3 - Where to stay**: Budget hotel, Mid-range, Luxury, Hostel, or Apartment; number of nights
 4. **Step 4 - Style & budget**: Trip style (Adventure/Luxury/Family/Solo), Budget (INR)
-5. **Backend** -> Fetches real-time flight prices (Skyscanner via RapidAPI when `RAPIDAPI_KEY` is set), merges with engine options, adds hotel cost, AI scoring
-6. **Results** -> Transport + hotel options; "Live price" badge when Skyscanner data is used
+5. **Backend** -> Fetches real-time Google Flights results via SerpApi when `SERPAPI_KEY` is set, merges with engine options, adds hotel cost, AI scoring
+6. **Results** -> Transport + hotel options; "Live price" badge when SerpApi flight data is used
 7. **User review** -> Select & review -> Dummy payment -> Booking confirmation -> Data stored for learning
 
-## Real-time APIs (Google Maps, Skyscanner, Hotels, Fuel)
+## Real-time APIs (Google Maps, SerpApi, Hotels, Fuel)
 
-- Set `RAPIDAPI_KEY` in your environment to enable live flight prices.
-- Get a key: [RapidAPI - Skyscanner Flight Search](https://rapidapi.com/skyscanner-api-skyscanner-api-default/api/skyscanner-flight-search) (or search "Skyscanner" on RapidAPI).
-- Example: `set RAPIDAPI_KEY=your_key` (Windows) or `export RAPIDAPI_KEY=your_key` (Mac/Linux), then `npm start`.
-- Without the key, the app uses simulated transport + hotel prices and still works.
-- `Google Maps`: Set `GOOGLE_MAPS_API_KEY` for the route map (else OpenStreetMap/Leaflet is used).
-- `Hotels`: Real-time hotel list at destination uses same `RAPIDAPI_KEY`; set `HOTEL_API_HOST` if using a different hotel API on RapidAPI.
+- Set `SERPAPI_KEY` in your environment to enable live Google Flights, hotels, and event search.
+- Example: `set SERPAPI_KEY=your_key` (Windows) or `export SERPAPI_KEY=your_key` (Mac/Linux), then `npm start`.
+- Without the SerpApi key, the app falls back to simulated flight pricing and still works.
+- `Google Maps`: Set `GOOGLE_MAPS_API_KEY` for the route map and Google city suggestions.
+- `Hotels`: Real-time hotel list uses SerpApi first, then `RAPIDAPI_KEY` as a fallback provider if configured.
 - `Fuel (Car)`: When user chooses Car, real-time petrol price (India) and fuel cost use same `RAPIDAPI_KEY`; subscribe to a fuel price API on RapidAPI.
 
 ## Features
@@ -30,13 +29,13 @@ Web-based intelligent platform to plan end-to-end travel using multiple transpor
 - **Cost, distance, duration**: Per leg and total (x travelers)
 - **Personalized recommendations**: Preference type + saved preferences + travel history
 - **Event-based planning**: Local events at destination
-- **Interactive map**: Leaflet/OpenStreetMap
+- **Interactive map**: Google Maps
 - **Review -> Dummy payment -> Booking confirmation**: Full booking flow; data stored for learning
 - **Travel history & Preferences**: My Trips, preferred modes and budget
 
 ## Tech Stack
 
-- **Frontend**: HTML, CSS, JavaScript (vanilla), Leaflet for maps
+- **Frontend**: HTML, CSS, JavaScript (vanilla), Google Maps for maps
 - **Backend**: Node.js, Express
 - **Database**: JSON file store (no native build), stored in `data/travel.json`
 - **Session**: express-session (in-memory; use a store for production)

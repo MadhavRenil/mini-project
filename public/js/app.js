@@ -1,9 +1,11 @@
 (function () {
   const API = '/api';
-  let map = null;
-  let mapMarkers = [];
   let googleMapsApiKey = '';
   let googleMapInstance = null;
+  let googleMapsReady = false;
+  let googleMapsLoadPromise = null;
+  let googleMapsLoadResolve = null;
+  let googleMapsLoadReject = null;
   let lastPlanData = null; // transport_choice, options for real-time sections
   let planState = null; // { source, destination, travel_date, budget, preference_type, num_travelers, selected_option }
   let flightRealtimeOptions = [];
@@ -79,9 +81,125 @@
     window.location.replace('/login');
   }
 
+  function buildGoogleMapsRouteUrl(source, destination) {
+    return 'https://www.google.com/maps/dir/?api=1&origin='
+      + encodeURIComponent(source || '')
+      + '&destination='
+      + encodeURIComponent(destination || '')
+      + '&travelmode=driving';
+  }
+
+  function renderGoogleMapsFallback(container, source, destination, message) {
+    const iframeSrc = 'https://www.google.com/maps?q='
+      + encodeURIComponent([source, destination].filter(Boolean).join(' to '))
+      + '&output=embed';
+    const routeUrl = buildGoogleMapsRouteUrl(source, destination);
+
+    container.innerHTML = `
+      <div class="map-embed-shell">
+        <iframe
+          title="Google Maps preview"
+          src="${iframeSrc}"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+          style="width:100%; height:100%; min-height:320px; border:0; border-radius:24px;"
+        ></iframe>
+        <div style="margin-top:0.75rem; color:var(--text-soft, #6b7280); font-size:0.95rem;">
+          ${escapeHtml(message || 'Google Maps preview is shown in simplified mode.')}
+        </div>
+        <a
+          href="${routeUrl}"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="display:inline-flex; margin-top:0.75rem; text-decoration:none;"
+        >Open route in Google Maps</a>
+      </div>
+    `;
+  }
+
+  function handleGoogleMapsReady() {
+    googleMapsReady = !!(window.google && window.google.maps);
+    enableGooglePlacesAutocomplete();
+
+    if (googleMapsLoadResolve) {
+      googleMapsLoadResolve(true);
+      googleMapsLoadResolve = null;
+      googleMapsLoadReject = null;
+    }
+
+    const activeTrip = planState || lastPlanData;
+    if (activeTrip?.source && activeTrip?.destination) {
+      renderMap(activeTrip.source, activeTrip.destination);
+    }
+  }
+
+  function loadGoogleMapsScript(apiKey) {
+    if (!apiKey) return Promise.resolve(false);
+    if (window.google && window.google.maps) {
+      handleGoogleMapsReady();
+      return Promise.resolve(true);
+    }
+    if (googleMapsLoadPromise) return googleMapsLoadPromise;
+
+    googleMapsLoadPromise = new Promise((resolve, reject) => {
+      googleMapsLoadResolve = resolve;
+      googleMapsLoadReject = reject;
+
+      const existingScript = document.querySelector('script[data-google-maps-loader="1"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', handleGoogleMapsReady, { once: true });
+        existingScript.addEventListener('error', () => {
+          googleMapsReady = false;
+          googleMapsLoadPromise = null;
+          if (googleMapsLoadReject) {
+            googleMapsLoadReject(new Error('Failed to load Google Maps'));
+            googleMapsLoadResolve = null;
+            googleMapsLoadReject = null;
+          }
+        }, { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://maps.googleapis.com/maps/api/js?key='
+        + encodeURIComponent(apiKey)
+        + '&libraries=places&callback=initGooglePlacesAutocomplete';
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleMapsLoader = '1';
+      script.onerror = () => {
+        googleMapsReady = false;
+        googleMapsLoadPromise = null;
+        script.remove();
+        if (googleMapsLoadReject) {
+          googleMapsLoadReject(new Error('Failed to load Google Maps'));
+          googleMapsLoadResolve = null;
+          googleMapsLoadReject = null;
+        }
+      };
+      document.head.appendChild(script);
+    });
+
+    return googleMapsLoadPromise;
+  }
+
   function safeNum(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
+  }
+
+  function parseDateTimeValue(value) {
+    if (!value) return null;
+    const normalized = String(value).trim().replace(' ', 'T');
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function formatTimeLabel(value, fallbackDate = null) {
+    const parsed = parseDateTimeValue(value);
+    const source = parsed || fallbackDate;
+    if (!source || Number.isNaN(source.getTime())) return '--:--';
+    return `${String(source.getHours()).padStart(2, '0')}:${String(source.getMinutes()).padStart(2, '0')}`;
   }
 
   function escapeHtml(value) {
@@ -489,8 +607,11 @@
         const baseDep = travel_date ? new Date(`${travel_date}T06:00:00`) : new Date();
         baseDep.setHours(6 + (i % 10), (i * 7) % 60, 0, 0);
         const baseArr = new Date(baseDep.getTime() + (duration * 60 * 1000));
-        const depTime = `${String(baseDep.getHours()).padStart(2, '0')}:${String(baseDep.getMinutes()).padStart(2, '0')}`;
-        const arrTime = `${String(baseArr.getHours()).padStart(2, '0')}:${String(baseArr.getMinutes()).padStart(2, '0')}`;
+        const depTime = formatTimeLabel(opt.outbound, baseDep);
+        const arrTime = formatTimeLabel(opt.arrival, baseArr);
+        const apiPriceLine = opt.from_api && opt.price_total != null
+          ? `<span>Flight fare: INR ${safeNum(opt.price_total, 0).toLocaleString('en-IN')}</span>`
+          : '';
         card.innerHTML = `
           <div class="option-g-main">
             <div class="option-g-head">
@@ -513,6 +634,7 @@
               </div>
             </div>
             <div class="option-stats">
+              ${apiPriceLine}
               <span>${modesText || 'Multimodal'}</span>
               <span>${hotelLine}</span>
             </div>
@@ -906,131 +1028,70 @@
     const container = document.getElementById('map');
     if (!container) return;
     container.innerHTML = '';
+    if (!source || !destination) {
+      container.innerHTML = '<div class="section-empty">Add both cities to load the route map.</div>';
+      return;
+    }
+
+    if (!googleMapsApiKey) {
+      renderGoogleMapsFallback(
+        container,
+        source,
+        destination,
+        'Google Maps needs a valid GOOGLE_MAPS_API_KEY for the full interactive route map and Places suggestions.'
+      );
+      return;
+    }
+
+    if (!(window.google && window.google.maps)) {
+      renderGoogleMapsFallback(
+        container,
+        source,
+        destination,
+        'Loading Google Maps. If this keeps failing, enable Maps JavaScript API, Places API, and billing on the key.'
+      );
+      loadGoogleMapsScript(googleMapsApiKey).catch(() => {
+        renderGoogleMapsFallback(
+          container,
+          source,
+          destination,
+          'Google Maps could not be loaded. Check key restrictions, enabled APIs, and billing.'
+        );
+      });
+      return;
+    }
+
     const src = geocodeCity(source);
     const dst = geocodeCity(destination);
-    if (googleMapsApiKey && window.google && window.google.maps) {
-      const center = { lat: (src[0] + dst[0]) / 2, lng: (src[1] + dst[1]) / 2 };
-      googleMapInstance = new google.maps.Map(container, {
-        zoom: 5,
-        center,
-        mapTypeId: 'roadmap'
-      });
-      new google.maps.Marker({ position: { lat: src[0], lng: src[1] }, map: googleMapInstance, title: source });
-      new google.maps.Marker({ position: { lat: dst[0], lng: dst[1] }, map: googleMapInstance, title: destination });
-      const path = new google.maps.Polyline({
-        path: [{ lat: src[0], lng: src[1] }, { lat: dst[0], lng: dst[1] }],
-        strokeColor: '#3b82f6',
-        strokeWeight: 3,
-        map: googleMapInstance
-      });
-      const bounds = new google.maps.LatLngBounds(
-        new google.maps.LatLng(src[0], src[1]),
-        new google.maps.LatLng(dst[0], dst[1])
-      );
-      googleMapInstance.fitBounds(bounds, 40);
-    } else {
-      const center = [(src[0] + dst[0]) / 2, (src[1] + dst[1]) / 2];
-      const bounds = [src, dst];
-      map = L.map(container).setView(center, 4);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
-      mapMarkers.forEach(m => m.remove());
-      mapMarkers = [];
-      const m1 = L.marker(src).addTo(map).bindPopup(source);
-      const m2 = L.marker(dst).addTo(map).bindPopup(destination);
-      mapMarkers.push(m1, m2);
-      L.polyline([src, dst], { color: '#3b82f6', weight: 3 }).addTo(map);
-      map.fitBounds(bounds, { padding: [40, 40] });
-    }
+    const center = { lat: (src[0] + dst[0]) / 2, lng: (src[1] + dst[1]) / 2 };
+    googleMapsReady = true;
+    googleMapInstance = new google.maps.Map(container, {
+      zoom: 5,
+      center,
+      mapTypeId: 'roadmap'
+    });
+    new google.maps.Marker({ position: { lat: src[0], lng: src[1] }, map: googleMapInstance, title: source });
+    new google.maps.Marker({ position: { lat: dst[0], lng: dst[1] }, map: googleMapInstance, title: destination });
+    new google.maps.Polyline({
+      path: [{ lat: src[0], lng: src[1] }, { lat: dst[0], lng: dst[1] }],
+      strokeColor: '#3b82f6',
+      strokeWeight: 3,
+      map: googleMapInstance
+    });
+    const bounds = new google.maps.LatLngBounds(
+      new google.maps.LatLng(src[0], src[1]),
+      new google.maps.LatLng(dst[0], dst[1])
+    );
+    googleMapInstance.fitBounds(bounds, 40);
   }
 
-  function loadRealTimeFlights(options, transportChoice) {
+  function loadRealTimeFlights(options) {
     const section = document.getElementById('realTimeFlightsSection');
     const list = document.getElementById('realTimeFlightsList');
     if (!section || !list) return;
-    const hasFlight = transportChoice && transportChoice.includes('flight');
-    const flightOpts = (options || []).filter(o => o.from_api || ((o.modes || []).includes('flight')));
-    flightRealtimeOptions = flightOpts;
-    if (!hasFlight && flightOpts.length === 0) {
-      section.classList.add('hidden');
-      return;
-    }
-    section.classList.remove('hidden');
-    if (flightOpts.length === 0) {
-      list.innerHTML = '<div class="section-empty">No real-time flight data for this search yet. You can still continue with recommended route options above.</div>';
-      return;
-    }
-    list.innerHTML = flightOpts.map((o, idx) => {
-      const price = o.total_cost != null ? o.total_cost : (o.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
-      const carrier = o.carrier || (o.legs && o.legs[0] && o.legs[0].modeName) || 'Flight';
-      const durationMins = o.total_duration_minutes || (o.legs || []).reduce((s, l) => s + (l.duration_minutes || 0), 0) || 120;
-      const flightRef = o.quote_id || o.id || `FL-${1000 + idx}`;
-      const depDateText = o.outbound ? new Date(o.outbound).toLocaleDateString() : 'Not provided';
-      const carrierLabel = carrier && carrier.trim() ? carrier : 'Airline info unavailable';
-      const flightTypeText = o.direct !== false ? 'Direct' : '1 Stop';
-
-      // Generate realistic times
-      const now = new Date();
-      // Start between 6 AM and 8 PM
-      const startHour = 6 + Math.floor(Math.random() * 14);
-      const startMin = Math.floor(Math.random() * 60);
-      const endDate = new Date(now);
-      endDate.setHours(startHour, startMin + durationMins, 0, 0);
-
-      const depTime = `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}`;
-      const arrTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
-      const hours = Math.floor(durationMins / 60);
-      const mins = durationMins % 60;
-      const arrDateText = o.outbound
-        ? new Date(new Date(o.outbound).getTime() + durationMins * 60 * 1000).toLocaleDateString()
-        : 'Not provided';
-      const baggageText = 'Cabin 7kg / Check-in 15kg (placeholder)';
-      const refundText = 'Refundable policy: TBD (placeholder)';
-
-      const sourceCode = ((planState && planState.source) || (lastPlanData && lastPlanData.source) || 'SRC').substring(0, 3).toUpperCase();
-      const destCode = ((planState && planState.destination) || (lastPlanData && lastPlanData.destination) || 'DST').substring(0, 3).toUpperCase();
-
-      return `
-        <div class="flight-card card">
-          <div class="flight-main">
-            <div class="flight-info">
-              <div class="airline-logo">${carrierLabel.split(' ').map(w => w[0]).join('').substring(0, 2)}</div>
-              <div class="flight-route">
-                <div class="flight-time">
-                  <span class="time">${depTime}</span>
-                  <span class="airport">${sourceCode}</span>
-                </div>
-                <div class="flight-duration">
-                  <span class="duration-text">${hours}h ${mins}m</span>
-                  <div class="duration-line"></div>
-                  <span class="duration-text">${o.direct !== false ? 'Direct' : '1 Stop'}</span>
-                </div>
-                <div class="flight-time">
-                  <span class="time">${arrTime}</span>
-                  <span class="airport">${destCode}</span>
-                </div>
-              </div>
-            </div>
-            <div class="flight-price-section">
-              ${o.from_api ? '<span class="deal-tag">Live Deal</span>' : ''}
-              <span class="price-tag">₹${(price || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-              <div class="flight-meta-grid">
-                <div><span class="meta-k">Airline:</span> <span class="meta-v">${carrierLabel}</span></div>
-                <div><span class="meta-k">Flight Ref:</span> <span class="meta-v">${flightRef}</span></div>
-                <div><span class="meta-k">Type:</span> <span class="meta-v">${flightTypeText}</span></div>
-                <div><span class="meta-k">Departure:</span> <span class="meta-v">${depDateText}</span></div>
-                <div><span class="meta-k">Arrival:</span> <span class="meta-v">${arrDateText} ${arrTime}</span></div>
-                <div><span class="meta-k">Duration:</span> <span class="meta-v">${hours}h ${mins}m</span></div>
-                <div><span class="meta-k">Baggage:</span> <span class="meta-v">${baggageText}</span></div>
-                <div><span class="meta-k">Refundable:</span> <span class="meta-v">${refundText}</span></div>
-              </div>
-              <div class="flight-actions">
-                <button type="button" class="btn btn-primary btn-select-flight" onclick="selectFlight(${idx})">Select & Build Itinerary</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    flightRealtimeOptions = (options || []).filter((option) => option.from_api);
+    section.classList.add('hidden');
+    list.innerHTML = '';
   }
 
   async function loadFuelCostIfCar(options, transportChoice) {
@@ -1228,13 +1289,22 @@
 
   function attachCityAutocomplete(inputEl) {
     if (!inputEl) return;
-    const parent = inputEl.closest('.form-row') || inputEl.parentElement;
-    if (!parent) return;
-    parent.classList.add('autocomplete-wrap');
+    if (inputEl.dataset.autocompleteAttached === '1') return;
+
+    let parent = inputEl.closest('.autocomplete-wrap') || inputEl.closest('.form-row');
+    if (!parent) {
+      parent = document.createElement('div');
+      parent.className = 'autocomplete-wrap';
+      inputEl.parentNode.insertBefore(parent, inputEl);
+      parent.appendChild(inputEl);
+    } else {
+      parent.classList.add('autocomplete-wrap');
+    }
 
     const listEl = document.createElement('div');
     listEl.className = 'city-suggest-list hidden';
     parent.appendChild(listEl);
+    inputEl.dataset.autocompleteAttached = '1';
 
     let activeIndex = -1;
     let currentItems = [];
@@ -1334,6 +1404,7 @@
     const fields = [
       document.getElementById('planSource'),
       document.getElementById('planDestination'),
+      document.getElementById('heroSourceInput'),
       document.getElementById('heroSearchInput')
     ].filter(Boolean);
 
@@ -1353,7 +1424,23 @@
   }
 
   window.initGooglePlacesAutocomplete = function () {
-    enableGooglePlacesAutocomplete();
+    handleGoogleMapsReady();
+  };
+
+  window.gm_authFailure = function () {
+    googleMapsReady = false;
+    googleMapInstance = null;
+    googleMapsLoadPromise = null;
+    if (googleMapsLoadReject) {
+      googleMapsLoadReject(new Error('Google Maps authentication failed'));
+      googleMapsLoadResolve = null;
+      googleMapsLoadReject = null;
+    }
+    notify('Google Maps rejected the API key. Check billing and enabled APIs.', 'error');
+    const activeTrip = planState || lastPlanData;
+    if (activeTrip?.source && activeTrip?.destination) {
+      renderMap(activeTrip.source, activeTrip.destination);
+    }
   };
 
   // Hero Search Logic (New)
@@ -1491,12 +1578,6 @@ async function loadPreferences() {
         setButtonLoading(saveBtn, '', false);
       }
     });
-    heroSearchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        heroSearchBtn.click();
-      }
-    });
   }
 
   // Itinerary Logic
@@ -1623,12 +1704,7 @@ async function loadPreferences() {
       const config = await fetchJSON(API + '/config');
       if (config.googleMapsApiKey) {
         googleMapsApiKey = config.googleMapsApiKey;
-        const script = document.createElement('script');
-        script.src = 'https://maps.googleapis.com/maps/api/js?key=' + config.googleMapsApiKey + '&libraries=places&callback=initGooglePlacesAutocomplete';
-        script.async = true;
-        script.defer = true;
-        script.onerror = () => { };
-        document.head.appendChild(script);
+        loadGoogleMapsScript(config.googleMapsApiKey).catch(() => { });
       }
     } catch (_) { }
   })();
