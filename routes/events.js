@@ -1,59 +1,102 @@
 const express = require('express');
+const { fetchEventsRealTime } = require('../lib/apis');
 
-// Simulated local events by city; real app would use Eventbrite, Ticketmaster, or similar API
-const EVENTS_BY_CITY = {
-  'new york': [
-    { id: 1, name: 'Broadway Show: Hamilton', date: '2025-03-15', type: 'Culture', venue: 'Richard Rodgers Theatre' },
-    { id: 2, name: 'Central Park Summer Festival', date: '2025-06-20', type: 'Festival', venue: 'Central Park' },
-    { id: 3, name: 'NYC Food & Wine Festival', date: '2025-10-05', type: 'Food', venue: 'Various' }
-  ],
-  'los angeles': [
-    { id: 4, name: 'Hollywood Bowl Concert Series', date: '2025-07-10', type: 'Music', venue: 'Hollywood Bowl' },
-    { id: 5, name: 'LA Art Walk', date: '2025-04-12', type: 'Culture', venue: 'Downtown LA' }
-  ],
-  'chicago': [
-    { id: 6, name: 'Lollapalooza', date: '2025-08-01', type: 'Festival', venue: 'Grant Park' },
-    { id: 7, name: 'Chicago Jazz Festival', date: '2025-09-01', type: 'Music', venue: 'Millennium Park' }
-  ],
-  'miami': [
-    { id: 8, name: 'Art Basel Miami Beach', date: '2025-12-04', type: 'Culture', venue: 'Miami Beach' },
-    { id: 9, name: 'Ultra Music Festival', date: '2025-03-28', type: 'Music', venue: 'Bayfront Park' }
-  ],
-  'san francisco': [
-    { id: 10, name: 'Outside Lands', date: '2025-08-08', type: 'Festival', venue: 'Golden Gate Park' }
-  ],
-  'las vegas': [
-    { id: 11, name: 'CES', date: '2026-01-06', type: 'Tech', venue: 'Las Vegas Convention Center' }
-  ],
-  'boston': [
-    { id: 12, name: 'Boston Marathon', date: '2025-04-21', type: 'Sports', venue: 'Boston' }
-  ]
-};
+const router = express.Router();
 
 function normalizeCity(name) {
   return (name || '').toLowerCase().trim();
 }
 
-const router = express.Router();
+function titleCase(name) {
+  return String(name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
-router.get('/', (req, res) => {
+function buildIsoDate(baseDate, offsetDays) {
+  const value = new Date(baseDate.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+  return value.toISOString().slice(0, 10);
+}
+
+function buildFallbackEvents(city, travelDate = null) {
+  const cityLabel = titleCase(city || 'Destination');
+  const seedDate = travelDate
+    ? new Date(`${travelDate}T00:00:00`)
+    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const baseDate = Number.isNaN(seedDate.getTime())
+    ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    : seedDate;
+
+  const templates = [
+    {
+      name: `${cityLabel} Night Market`,
+      type: 'Food',
+      venue: `Old Town ${cityLabel}`,
+      offsetDays: 0,
+      when: '6:30 PM'
+    },
+    {
+      name: `${cityLabel} Live Music Session`,
+      type: 'Music',
+      venue: `${cityLabel} Waterfront`,
+      offsetDays: 1,
+      when: '8:00 PM'
+    },
+    {
+      name: `${cityLabel} Local Culture Walk`,
+      type: 'Culture',
+      venue: `${cityLabel} Heritage District`,
+      offsetDays: 2,
+      when: '10:00 AM'
+    }
+  ];
+
+  return templates.map((event, index) => ({
+    id: `fallback-event-${index + 1}-${city.replace(/\s+/g, '-')}`,
+    name: event.name,
+    date: buildIsoDate(baseDate, event.offsetDays),
+    when: event.when,
+    type: event.type,
+    venue: event.venue,
+    source: 'fallback'
+  }));
+}
+
+router.get('/', async (req, res) => {
   const city = normalizeCity(req.query.city || req.query.destination || '');
+  const travelDate = req.query.travel_date || req.query.date || null;
   if (!city) {
     return res.json({ events: [], message: 'Provide city or destination query' });
   }
-  let events = EVENTS_BY_CITY[city] || [];
-  const type = (req.query.type || '').toLowerCase();
-  if (type) {
-    events = events.filter(e => (e.type || '').toLowerCase() === type);
+
+  const type = (req.query.type || '').toLowerCase().trim();
+  let events = await fetchEventsRealTime(city, travelDate);
+  let source = 'serpapi';
+
+  if (!events || !events.length) {
+    events = buildFallbackEvents(city, travelDate);
+    source = 'fallback';
   }
-  res.json({ city, events });
+
+  if (type) {
+    events = events.filter((event) => String(event.type || '').toLowerCase() === type);
+  }
+
+  return res.json({ city, source, events });
 });
 
 router.get('/all', (req, res) => {
-  const all = Object.entries(EVENTS_BY_CITY).flatMap(([city, events]) =>
-    events.map(e => ({ ...e, city }))
+  const cities = ['goa', 'mumbai', 'delhi', 'bangalore'];
+  const events = cities.flatMap((city) =>
+    buildFallbackEvents(city).map((event) => ({
+      ...event,
+      city
+    }))
   );
-  res.json({ events: all });
+
+  return res.json({ events });
 });
 
 module.exports = router;

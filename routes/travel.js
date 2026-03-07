@@ -127,7 +127,7 @@ router.post('/save-itinerary', requireAuth, (req, res) => {
 
 // Generate Itinerary
 router.post('/itinerary', optionalAuth(), async (req, res) => {
-  const { destination, days, interests, context } = req.body;
+  const { destination, days, interests, context, selected_events } = req.body;
   if (!destination) {
     return res.status(400).json({ error: 'Destination required' });
   }
@@ -138,8 +138,23 @@ router.post('/itinerary', optionalAuth(), async (req, res) => {
     if (req.session && req.session.userId) {
       contextStr += ' User is logged in.';
     }
+    if (Array.isArray(selected_events) && selected_events.length) {
+      const selectedEventNames = selected_events
+        .map((event) => event?.name || event?.title)
+        .filter(Boolean)
+        .join(', ');
+      if (selectedEventNames) {
+        contextStr += ` Selected local events: ${selectedEventNames}.`;
+      }
+    }
 
-    const itinerary = await generateItinerary(destination, days || 3, interests || [], contextStr);
+    const itinerary = await generateItinerary(
+      destination,
+      days || 3,
+      interests || [],
+      contextStr,
+      selected_events || []
+    );
     res.json({ itinerary });
   } catch (err) {
     console.error('Itinerary route error:', err.message);
@@ -171,6 +186,8 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
     preference_type,
     num_travelers,
     selected_option,
+    selected_events,
+    itinerary,
     total_cost,
     payment_ref
   } = req.body;
@@ -179,7 +196,12 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
   }
   const userId = req.session && req.session.userId;
   const db = getDb();
-  const optionJson = typeof selected_option === 'string' ? selected_option : JSON.stringify(selected_option);
+  const storedSelection = typeof selected_option === 'string'
+    ? { selected_option_raw: selected_option }
+    : { ...selected_option };
+  storedSelection.selected_events = Array.isArray(selected_events) ? selected_events : [];
+  storedSelection.final_itinerary = Array.isArray(itinerary) ? itinerary : null;
+  const optionJson = JSON.stringify(storedSelection);
   const cost = total_cost != null ? Number(total_cost) : (selected_option.total_cost != null ? selected_option.total_cost : 0);
   const stmt = db.prepare(`
     INSERT INTO bookings

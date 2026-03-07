@@ -57,6 +57,9 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/app', (req, res) => {
+  if (!req.session || !req.session.userId) {
+    return res.redirect('/login');
+  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

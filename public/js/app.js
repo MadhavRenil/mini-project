@@ -10,6 +10,9 @@
   let hotelRealtimeOptions = [];
   let selectedHotel = null;
   let hotelFetchKey = '';
+  let destinationEvents = [];
+  let selectedDestinationEvents = [];
+  let destinationEventsKey = '';
 
   function showPage(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -72,9 +75,35 @@
     }
   }
 
+  function redirectToLogin() {
+    window.location.replace('/login');
+  }
+
   function safeNum(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function cloneEvents(events) {
+    return (Array.isArray(events) ? events : []).map((event) => ({ ...event }));
+  }
+
+  function getSelectedEventsForPlan() {
+    return cloneEvents(selectedDestinationEvents);
+  }
+
+  function syncPlanSelectedEvents() {
+    if (!planState) return;
+    planState.selected_events = getSelectedEventsForPlan();
   }
 
   function buildCheckoutDate(checkin, nights) {
@@ -284,9 +313,8 @@
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
     try {
       await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
-      await checkAuth();
-      showPage('landing');
     } catch (_) { }
+    redirectToLogin();
   });
 
   // Nav links
@@ -535,7 +563,7 @@
         selected_hotel
       };
       renderMap(source, destination);
-      loadEvents(destination);
+      loadEvents(destination, travel_date);
       loadRealTimeFlights(optionsWithSelectedHotel, transport_choice);
       loadFuelCostIfCar(optionsWithSelectedHotel, transport_choice);
       notify('Trip options loaded.', 'success');
@@ -556,7 +584,8 @@
       budget: card.dataset.budget ? parseFloat(card.dataset.budget) : null,
       preference_type: card.dataset.preference_type || null,
       num_travelers: parseInt(card.dataset.num_travelers, 10) || 1,
-      selected_option: opt
+      selected_option: opt,
+      selected_events: getSelectedEventsForPlan()
     };
 
     // User requested flow: User Selects Option -> Enter Preferences -> OpenAI Generates Itinerary -> Show Itinerary
@@ -596,6 +625,20 @@
       doc.text(`- ${leg.modeName} (${leg.duration_minutes}m): ${leg.estimated_cost} INR`, 20, y);
       y += 8;
     });
+
+    if (planState.selected_events && planState.selected_events.length) {
+      y += 8;
+      doc.setFontSize(16);
+      doc.text('Selected Events', 20, y);
+      y += 10;
+      doc.setFontSize(12);
+      planState.selected_events.forEach((event) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        const eventLine = `${event.name}${event.venue ? ` - ${event.venue}` : ''}${event.when ? ` (${event.when})` : ''}`;
+        doc.text(`- ${eventLine}`, 20, y);
+        y += 8;
+      });
+    }
 
     if (planState.itinerary) {
       y += 10;
@@ -1411,6 +1454,6 @@ async function loadPreferences() {
       showPage('plan');
       return;
     }
-    showPage('landing');
+    redirectToLogin();
   });
 })();

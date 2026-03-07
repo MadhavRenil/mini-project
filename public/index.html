@@ -34,7 +34,7 @@
 
   <main class="main">
     <!-- Landing / Home (Replaced with User's Design) -->
-    <section id="page-landing" class="page active">
+    <section id="page-landing" class="page">
       <section class="hero-new">
         <div class="container hero-grid">
           <div class="hero-card hero-auth">
@@ -65,7 +65,7 @@
       </section>
     </section>
     <!-- Plan Trip – Step-by-step wizard -->
-    <section id="page-plan" class="page">
+    <section id="page-plan" class="page active">
       <div class="container">
         <h2>Plan Your Trip</h2>
         <div class="wizard-steps">
@@ -255,7 +255,13 @@
             <div id="map" class="map-container"></div>
           </div>
           <div id="destinationEvents" class="events-section">
-            <h3>Events at destination</h3>
+            <div class="section-head">
+              <div>
+                <h3>Local events</h3>
+                <p class="section-subtitle">Pick the events you want included in the final itinerary.</p>
+              </div>
+              <span id="eventsSelectedCount" class="selection-pill hidden">0 selected</span>
+            </div>
             <div id="eventsList" class="events-list"></div>
           </div>
           <div id="itinerarySection" class="real-time-section hidden">
@@ -297,8 +303,9 @@
     <section id="page-review" class="page">
       <div class="container">
         <h2>Review your trip</h2>
+        <p class="section-subtitle">This page shows only a short glimpse. The full itinerary appears after the demo payment step.</p>
         <div id="reviewSummary" class="card review-summary"></div>
-        <button type="button" class="btn btn-primary" id="btnProceedPayment">Proceed to payment</button>
+        <button type="button" class="btn btn-primary" id="btnProceedPayment">Continue to demo payment</button>
         <a href="#" data-page="plan" class="nav-link" style="margin-left:0.5rem">Change selection</a>
       </div>
     </section>
