@@ -795,6 +795,11 @@ h2 {
   box-shadow: 0 0 0 1px rgba(255, 179, 71, 0.35);
 }
 
+.option-card.selected {
+  border-color: rgba(88, 184, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(88, 184, 255, 0.32), 0 12px 26px rgba(3, 8, 20, 0.38);
+}
+
 .hotel-card {
   padding: 0.8rem 0.9rem;
 }
@@ -991,9 +996,27 @@ h2 {
   margin-bottom: 0.45rem;
 }
 
+.option-g-price-note {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.55rem;
+}
+
 .map-section,
 .events-section {
   margin-top: 1.2rem;
+}
+
+.selected-option-action {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.selected-option-action h3 {
+  margin: 0 0 0.25rem;
 }
 
 .map-container {
@@ -1463,6 +1486,11 @@ h2 {
     border-top: 1px solid var(--line);
     padding-left: 0;
     padding-top: 0.7rem;
+  }
+
+  .selected-option-action {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .search-box {

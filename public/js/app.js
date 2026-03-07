@@ -16,6 +16,7 @@
   let destinationEvents = [];
   let selectedDestinationEvents = [];
   let destinationEventsKey = '';
+  let pendingReviewCard = null;
   const autocompleteCache = new Map();
 
   function showPage(pageId) {
@@ -251,21 +252,21 @@
     if (diff < 0) return { state: 'invalid', days: null, nights: null, label: 'Return date must be after departure', invalid: true };
     const days = diff + 1;
     const nights = diff;
-    return { state: 'roundtrip', days, nights, label: `${days} day${days === 1 ? '' : 's'} ? ${nights} night${nights === 1 ? '' : 's'}`, invalid: false };
+    return { state: 'roundtrip', days, nights, label: `${days} day${days === 1 ? '' : 's'} | ${nights} night${nights === 1 ? '' : 's'}`, invalid: false };
   }
 
   function getTripLengthLabel(days, nights) {
     if (!Number.isFinite(days) || days < 1) return '';
     const safeNights = Number.isFinite(nights) ? Math.max(0, nights) : Math.max(0, days - 1);
-    return `${days} day${days === 1 ? '' : 's'} ? ${safeNights} night${safeNights === 1 ? '' : 's'}`;
+    return `${days} day${days === 1 ? '' : 's'} | ${safeNights} night${safeNights === 1 ? '' : 's'}`;
   }
 
   function getTripDateLine(departureDate, returnDate) {
     if (!departureDate) return 'Travel dates: TBD';
-    if (!returnDate) return `Departure: ${departureDate} ? One-way`;
+    if (!returnDate) return `Departure: ${departureDate} | One-way`;
     const metrics = getTripMetrics(departureDate, returnDate);
-    if (metrics.invalid) return `Departure: ${departureDate} ? Return: ${returnDate}`;
-    return `Departure: ${departureDate} ? Return: ${returnDate} ? ${getTripLengthLabel(metrics.days, metrics.nights)}`;
+    if (metrics.invalid) return `Departure: ${departureDate} | Return: ${returnDate}`;
+    return `Departure: ${departureDate} | Return: ${returnDate} | ${getTripLengthLabel(metrics.days, metrics.nights)}`;
   }
 
   function getTripValidationMessage(departureDate, returnDate) {
@@ -377,6 +378,72 @@
         total_with_hotel: transportOnly + hotel.total_cost
       };
     });
+  }
+
+  function getHotelTotal(opt) {
+    return opt && opt.hotel && opt.hotel.total_cost != null ? safeNum(opt.hotel.total_cost, 0) : 0;
+  }
+
+  function getCombinedCost(opt) {
+    if (!opt) return 0;
+    if (opt.total_with_hotel != null) return safeNum(opt.total_with_hotel, 0);
+    if (opt.total_cost != null) return safeNum(opt.total_cost, 0);
+    return (opt.legs || []).reduce((sum, leg) => sum + safeNum(leg.estimated_cost, 0), 0);
+  }
+
+  function getTransportCost(opt) {
+    return Math.max(0, getCombinedCost(opt) - getHotelTotal(opt));
+  }
+
+  function getPriceLabel(opt) {
+    const modes = Array.isArray(opt?.modes) ? opt.modes : [];
+    if (modes.length === 1 && modes[0] === 'flight') return 'flight fare';
+    return 'transport only';
+  }
+
+  function getConnectionLabel(opt) {
+    const modes = Array.isArray(opt?.modes) ? opt.modes : [];
+    const legs = Array.isArray(opt?.legs) ? opt.legs : [];
+    const isFlightOnly = modes.length === 1 && modes[0] === 'flight';
+    if (isFlightOnly) {
+      const stops = opt && opt.stop_count != null
+        ? Math.max(0, parseInt(opt.stop_count, 10) || 0)
+        : (opt && opt.direct === false ? 1 : 0);
+      if (stops <= 0) return 'Direct flight';
+      return stops === 1 ? '1 connection' : `${stops} connections`;
+    }
+
+    const transfers = Math.max(0, legs.length - 1);
+    if (transfers <= 0) return 'Direct route';
+    return transfers === 1 ? '1 connection' : `${transfers} connections`;
+  }
+
+  function updateSelectedOptionAction() {
+    const action = document.getElementById('selectedOptionAction');
+    const summary = document.getElementById('selectedOptionSummary');
+    if (!action || !summary) return;
+    if (!pendingReviewCard) {
+      action.classList.add('hidden');
+      summary.textContent = 'Choose a route above, pick any events you want, then continue.';
+      return;
+    }
+
+    const opt = JSON.parse(pendingReviewCard.dataset.option || '{}');
+    const carrier = opt.carrier || (opt.legs && opt.legs[0] && opt.legs[0].modeName) || 'Selected route';
+    const transportCost = getTransportCost(opt);
+    const stayTotal = getHotelTotal(opt);
+    const connectionLabel = getConnectionLabel(opt);
+    summary.textContent = `${carrier} | ${connectionLabel} | INR ${transportCost.toLocaleString('en-IN')} ${getPriceLabel(opt)}${stayTotal ? ` | stay INR ${stayTotal.toLocaleString('en-IN')} separate` : ''}`;
+    action.classList.remove('hidden');
+  }
+
+  function selectTripOption(card) {
+    if (!card) return;
+    pendingReviewCard = card;
+    document.querySelectorAll('.option-card').forEach((item) => item.classList.toggle('selected', item === card));
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    updateSelectedOptionAction();
+    document.getElementById('destinationEvents')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function updateSelectedHotelSummary() {
@@ -529,6 +596,14 @@
     window.location.replace('/login?logout=1');
   });
 
+  document.getElementById('btnContinueSelectedOption')?.addEventListener('click', () => {
+    if (!pendingReviewCard) {
+      notify('Choose an option first.', 'error');
+      return;
+    }
+    goToReview(pendingReviewCard);
+  });
+
   // Nav links
   document.querySelectorAll('[data-page]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -556,7 +631,9 @@
     hotelRealtimeOptions = [];
     selectedHotel = null;
     hotelFetchKey = '';
+    pendingReviewCard = null;
     updateSelectedHotelSummary();
+    updateSelectedOptionAction();
     syncPlannerTripInputs();
     showWizardStep(1);
   }
@@ -718,19 +795,24 @@
       const resolvedTripMetrics = getTripMetrics(travel_date, selectedReturnDate);
 
       optionsList.innerHTML = '';
+      pendingReviewCard = null;
+      updateSelectedOptionAction();
       optionsWithSelectedHotel.forEach((opt, i) => {
         const card = document.createElement('div');
         card.className = 'option-card' + (i === 0 ? ' recommended' : '');
         const modes = (opt.modes || opt.legs?.map((l) => l.modeName || l.mode) || []);
         const modesText = modes.join(' -> ');
-        const cost = opt.total_cost != null ? opt.total_cost : (opt.total_with_hotel != null ? opt.total_with_hotel : (opt.legs || []).reduce((sum, leg) => sum + (leg.estimated_cost || 0), 0));
+        const transportCost = getTransportCost(opt);
+        const stayTotal = getHotelTotal(opt);
         const duration = opt.total_duration_minutes != null ? opt.total_duration_minutes : (opt.legs || []).reduce((sum, leg) => sum + (leg.duration_minutes || 0), 0);
         const dist = opt.total_distance_km != null ? opt.total_distance_km : (opt.legs || []).reduce((sum, leg) => sum + (leg.distance_km || 0), 0);
         const hotel = opt.hotel;
-        const hotelLine = hotel ? `Stay: ${escapeHtml(hotel.name)} (${hotel.total_nights} night${hotel.total_nights > 1 ? 's' : ''}) - INR ${safeNum(hotel.price_per_night, 0).toLocaleString('en-IN')}/night` : 'Stay details not available';
+        const hotelLine = hotel
+          ? `Stay: ${escapeHtml(hotel.name)} (${hotel.total_nights} night${hotel.total_nights > 1 ? 's' : ''}) - INR ${safeNum(hotel.price_per_night, 0).toLocaleString('en-IN')}/night | stay total INR ${stayTotal.toLocaleString('en-IN')} separate`
+          : 'Stay details not available';
         const primaryCarrier = opt.carrier || (opt.legs && opt.legs[0] && opt.legs[0].modeName) || 'Multimodal';
         const refCode = opt.quote_id || opt.id || `OPT-${i + 1}`;
-        const routeType = opt.direct !== false ? 'Direct' : '1 stop';
+        const connectionLabel = getConnectionLabel(opt);
         const sourceCode = (source || 'SRC').slice(0, 3).toUpperCase();
         const destCode = (destination || 'DST').slice(0, 3).toUpperCase();
         const hours = Math.floor(duration / 60);
@@ -756,7 +838,7 @@
               <div class="option-g-mid">
                 <span class="option-g-duration">${hours}h ${mins}m</span>
                 <div class="option-g-line"></div>
-                <span class="option-g-sub">${escapeHtml(routeType)} - ${dist.toFixed(0)} km</span>
+                <span class="option-g-sub">${escapeHtml(connectionLabel)} - ${dist.toFixed(0)} km</span>
               </div>
               <div class="option-g-timeblock">
                 <span class="option-g-time">${escapeHtml(arrTime)}</span>
@@ -771,10 +853,10 @@
             </div>
           </div>
           <div class="option-g-side">
-            <div class="option-g-price">INR ${(cost || 0).toFixed(2)}</div>
-            <div class="option-g-price-sub">total trip estimate</div>
+            <div class="option-g-price">INR ${(transportCost || 0).toFixed(2)}</div>
+            <div class="option-g-price-sub">${escapeHtml(getPriceLabel(opt))}</div>
             <div class="option-actions">
-              <button type="button" class="btn btn-primary btn-select-review" data-index="${i}">Select and review</button>
+              <button type="button" class="btn btn-primary btn-select-review" data-index="${i}">Choose option</button>
               <button type="button" class="btn btn-ghost btn-save-option" data-index="${i}">Save only</button>
             </div>
           </div>
@@ -798,7 +880,7 @@
       });
 
       if (!optionsWithSelectedHotel || optionsWithSelectedHotel.length === 0) optionsList.innerHTML = '<div class="section-empty">No route options found for this combination. Try another date, city pair, or transport mode.</div>';
-      optionsList.querySelectorAll('.btn-select-review').forEach((btn) => btn.addEventListener('click', () => goToReview(btn.closest('.option-card'))));
+      optionsList.querySelectorAll('.btn-select-review').forEach((btn) => btn.addEventListener('click', () => selectTripOption(btn.closest('.option-card'))));
       optionsList.querySelectorAll('.btn-save-option').forEach((btn) => btn.addEventListener('click', () => saveItineraryFromCard(btn.closest('.option-card'))));
 
       lastPlanData = { transport_choice, options: optionsWithSelectedHotel, source, destination, travel_date, return_date: selectedReturnDate, source_id, destination_id, trip_days: resolvedTripMetrics.days || null, trip_nights: resolvedTripMetrics.nights ?? null, budget, preference_type, num_travelers, hotel_type, hotel_nights, selected_hotel };
@@ -858,10 +940,14 @@
     }
 
     const opt = planState.selected_option;
-    const cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
-    doc.text(`Total Cost: ${cost.toFixed(2)} INR`, 20, planState.trip_days ? (planState.return_date ? 62 : 56) : (planState.return_date ? 56 : 52));
+    const transportCost = getTransportCost(opt);
+    const stayTotal = getHotelTotal(opt);
+    doc.text(`Transport Fare: ${transportCost.toFixed(2)} INR`, 20, planState.trip_days ? (planState.return_date ? 62 : 56) : (planState.return_date ? 56 : 52));
+    if (stayTotal) {
+      doc.text(`Stay Total: ${stayTotal.toFixed(2)} INR`, 20, planState.trip_days ? (planState.return_date ? 68 : 62) : (planState.return_date ? 62 : 58));
+    }
 
-    let y = planState.trip_days ? (planState.return_date ? 75 : 69) : (planState.return_date ? 69 : 65);
+    let y = stayTotal ? (planState.trip_days ? (planState.return_date ? 81 : 75) : (planState.return_date ? 75 : 71)) : (planState.trip_days ? (planState.return_date ? 75 : 69) : (planState.return_date ? 69 : 65));
     doc.setFontSize(16);
     doc.text('Transport', 20, y);
     y += 10;
@@ -988,10 +1074,11 @@
     if (!el || !planState) return;
     syncPlanSelectedEvents();
     const opt = planState.selected_option;
-    const cost = opt.total_cost != null ? opt.total_cost : (opt.total_with_hotel != null ? opt.total_with_hotel : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0));
+    const transportCost = getTransportCost(opt);
+    const stayTotal = getHotelTotal(opt);
     const modes = (opt.modes || opt.legs?.map((leg) => leg.modeName || leg.mode) || []).join(' -> ');
     const hotelLine = opt.hotel
-      ? `<div class="meta">Stay: ${escapeHtml(opt.hotel.name)} (${escapeHtml(opt.hotel.total_nights)} night(s)) | INR ${safeNum(opt.hotel.price_per_night, 0).toLocaleString('en-IN')}/night | Total INR ${safeNum(opt.hotel.total_cost, 0).toLocaleString('en-IN')}</div>`
+      ? `<div class="meta">Stay: ${escapeHtml(opt.hotel.name)} (${escapeHtml(opt.hotel.total_nights)} night(s)) | INR ${safeNum(opt.hotel.price_per_night, 0).toLocaleString('en-IN')}/night | Separate stay total INR ${stayTotal.toLocaleString('en-IN')}</div>`
       : '';
     const tripLengthLine = planState.trip_days ? `<div class="meta">Trip length: ${escapeHtml(getTripLengthLabel(planState.trip_days, planState.trip_nights))}</div>` : '';
 
@@ -999,9 +1086,9 @@
       <div class="route">${escapeHtml(planState.source)} -> ${escapeHtml(planState.destination)}</div>
       <div class="meta">${escapeHtml(getTripDateLine(planState.travel_date, planState.return_date))} | Travelers: ${escapeHtml(planState.num_travelers)}</div>
       ${tripLengthLine}
-      <div class="meta">${escapeHtml(modes || 'Multimodal')}</div>
+      <div class="meta">${escapeHtml(modes || 'Multimodal')} | ${escapeHtml(getConnectionLabel(opt))}</div>
+      <div class="meta">Transport fare: INR ${transportCost.toFixed(2)}</div>
       ${hotelLine}
-      <div class="meta" style="margin-top:0.5rem; font-weight:600;">Total: INR ${(cost || 0).toFixed(2)}</div>
       <div class="review-block">
         <div class="review-block-title">Selected local events</div>
         ${buildSelectedEventsPreview(planState.selected_events, 2)}
@@ -1033,7 +1120,7 @@
         body: JSON.stringify({ card_number, expiry, cvv, name_on_card })
       });
       const opt = planState.selected_option;
-      const total_cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+      const total_cost = getTransportCost(opt);
       const confirm = await fetchJSON(API + '/travel/confirm-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1069,14 +1156,16 @@
     if (!el || !planState) return;
     syncPlanSelectedEvents();
     const opt = planState.selected_option;
-    const cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+    const transportCost = getTransportCost(opt);
+    const stayTotal = getHotelTotal(opt);
     const selectedEvents = Array.isArray(planState.selected_events) ? planState.selected_events : [];
     const tripLengthLine = planState.trip_days ? `<div class="meta">Trip length: ${escapeHtml(getTripLengthLabel(planState.trip_days, planState.trip_nights))}</div>` : '';
     el.innerHTML = `
       <div class="route">${escapeHtml(planState.source)} -> ${escapeHtml(planState.destination)}</div>
       <div class="meta">${escapeHtml(getTripDateLine(planState.travel_date, planState.return_date))} | Travelers: ${escapeHtml(planState.num_travelers)}</div>
       ${tripLengthLine}
-      <div class="meta">Total paid: INR ${cost.toFixed(2)}</div>
+      <div class="meta">Transport fare paid: INR ${transportCost.toFixed(2)}</div>
+      ${stayTotal ? `<div class="meta">Stay selected separately: INR ${stayTotal.toFixed(2)}</div>` : ''}
       <div class="meta" style="margin-top:0.5rem;">Booking #${escapeHtml(planState.booking_id || 'TBD')} | Payment ref: ${escapeHtml(planState.payment_ref || 'TBD')}</div>
       <div class="confirmation-block">
         <div class="confirmation-block-title">Local events in this booking</div>
@@ -1106,7 +1195,7 @@
     const destination = card.dataset.destination;
     const start_date = card.dataset.travel_date || card.dataset.start_date;
     const end_date = card.dataset.end_date;
-    const total_cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+    const total_cost = getTransportCost(opt);
     const total_duration = opt.total_duration_minutes != null ? opt.total_duration_minutes : (opt.legs || []).reduce((s, l) => s + (l.duration_minutes || 0), 0);
     const total_distance_km = opt.total_distance_km != null ? opt.total_distance_km : (opt.legs || []).reduce((s, l) => s + (l.distance_km || 0), 0);
     try {
@@ -1198,15 +1287,28 @@
         destination,
         'Loading Google Maps. If this keeps failing, enable Maps JavaScript API, Places API, and billing on the key.'
       );
-      loadGoogleMapsScript(googleMapsApiKey).catch(() => {
+      try {
+        await loadGoogleMapsScript(googleMapsApiKey);
+      } catch (_) {
+        if (renderToken != mapRenderToken) return;
         renderGoogleMapsFallback(
           container,
           source,
           destination,
           'Google Maps could not be loaded. Check key restrictions, enabled APIs, and billing.'
         );
-      });
-      return;
+        return;
+      }
+      if (renderToken != mapRenderToken) return;
+      if (!(window.google && window.google.maps)) {
+        renderGoogleMapsFallback(
+          container,
+          source,
+          destination,
+          'Google Maps is unavailable right now. Check key restrictions, enabled APIs, and billing.'
+        );
+        return;
+      }
     }
 
     const [googleSrc, googleDst] = await Promise.all([
@@ -1215,10 +1317,18 @@
     ]);
     if (renderToken != mapRenderToken) return;
 
-    const srcFallback = geocodeCity(source);
-    const dstFallback = geocodeCity(destination);
-    const src = googleSrc || { lat: srcFallback[0], lng: srcFallback[1] };
-    const dst = googleDst || { lat: dstFallback[0], lng: dstFallback[1] };
+    if (!googleSrc || !googleDst) {
+      renderGoogleMapsFallback(
+        container,
+        source,
+        destination,
+        'Google Maps could not place one of these cities precisely, so a direct preview is shown instead.'
+      );
+      return;
+    }
+
+    const src = googleSrc;
+    const dst = googleDst;
     const center = { lat: (src.lat + dst.lat) / 2, lng: (src.lng + dst.lng) / 2 };
     googleMapsReady = true;
     googleMapInstance = new google.maps.Map(container, {
@@ -1232,6 +1342,7 @@
       path: [src, dst],
       strokeColor: '#3b82f6',
       strokeWeight: 3,
+      geodesic: true,
       map: googleMapInstance
     });
     const bounds = new google.maps.LatLngBounds(
@@ -1475,9 +1586,13 @@
     const service = getGooglePlacesService();
     if (!service) return [];
     return new Promise((resolve) => {
-      service.getPlacePredictions({ input: query, types: ['(cities)'] }, (predictions, status) => {
+      const finish = (predictions, status, relaxed = false) => {
         const ok = status === 'OK' || status === window.google?.maps?.places?.PlacesServiceStatus?.OK;
-        if (!ok || !Array.isArray(predictions)) {
+        if ((!ok || !Array.isArray(predictions) || !predictions.length) && !relaxed) {
+          service.getPlacePredictions({ input: query }, (fallbackPredictions, fallbackStatus) => finish(fallbackPredictions, fallbackStatus, true));
+          return;
+        }
+        if (!ok || !Array.isArray(predictions) || !predictions.length) {
           resolve([]);
           return;
         }
@@ -1490,7 +1605,8 @@
           airport_id: '',
           place_id: prediction.place_id || ''
         })));
-      });
+      };
+      service.getPlacePredictions({ input: query, types: ['(cities)'] }, (predictions, status) => finish(predictions, status, false));
     });
   }
 
