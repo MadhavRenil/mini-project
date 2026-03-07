@@ -26,7 +26,7 @@
             password: loginForm.password.value
           })
         });
-        window.location.href = '/';
+        window.location.href = '/app';
       } catch (error) {
         if (err) err.textContent = error.message || 'Login failed';
       } finally {
@@ -55,7 +55,7 @@
             password: registerForm.password.value
           })
         });
-        window.location.href = '/';
+        window.location.href = '/app';
       } catch (error) {
         if (err) err.textContent = error.message || 'Registration failed';
       } finally {
@@ -65,3 +65,4 @@
     });
   }
 })();
+

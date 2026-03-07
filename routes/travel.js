@@ -38,10 +38,12 @@ router.post('/plan', optionalAuth(), async (req, res) => {
   const travelDate = travel_date || start_date || null;
 
   let apiFlights = null;
+  let flightDataSource = null;
   try {
     const transport = await getTransportOptions(source, destination, travelDate, numT, transport_choice);
-    if (transport.flightOptions && transport.flightOptions.length) {
+    if (transport.hasLiveFlightData && transport.flightOptions && transport.flightOptions.length) {
       apiFlights = transport.flightOptions;
+      flightDataSource = transport.flightSource || null;
     }
   } catch (_) { }
 
@@ -76,6 +78,7 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     selected_hotel: selected_hotel || null,
     options,
     real_time_prices: !!apiFlights,
+    flight_data_source: flightDataSource,
     generated_at: new Date().toISOString()
   };
   res.json(payload);

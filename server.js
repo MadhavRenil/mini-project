@@ -49,11 +49,15 @@ app.use('/api/fuel', fuelRoutes);
 app.use('/api/maps', mapsRoutes);
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/register', (req, res) => {
@@ -79,4 +83,5 @@ const server = app.listen(PORT, () => {
 server.on('error', (err) => {
   console.error('[server-error]', err.message);
 });
+
 

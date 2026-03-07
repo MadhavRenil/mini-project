@@ -19,7 +19,7 @@
 <body>
   <header class="site-header">
     <div class="container header-inner">
-      <a href="/" class="logo">Voyag</a>
+      <a href="/app" class="logo">Voyag</a>
       <nav class="nav">
         <a href="#" data-page="plan" class="nav-link">Plan Trip</a>
         <a href="#" data-page="history" class="nav-link">My Trips</a>
@@ -36,50 +36,34 @@
     <!-- Landing / Home (Replaced with User's Design) -->
     <section id="page-landing" class="page active">
       <section class="hero-new">
-        <h1>Plan Your Perfect Trip</h1>
-        <div class="search-box">
-          <input type="text" id="heroSearchInput" placeholder="Where to?">
-          <button id="heroSearchBtn">Search</button>
-        </div>
-      </section>
-
-      <section class="trip-section">
-        <h2>Recommended Trips</h2>
-        <div class="trip-container">
-          <!-- Converted from PHP loop -->
-          <div class="trip-card">
-            <img src="https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=80" alt="Dubai skyline">
-            <div class="trip-info">
-              <h3>Dubai Adventure</h3>
-              <p>5 Days</p>
-              <span>₹45,000</span>
+        <div class="container hero-grid">
+          <div class="hero-card hero-auth">
+            <p class="eyebrow">Step 1 · Account</p>
+            <h1>Log in or register</h1>
+            <p class="lead">Save your trips, sync history, and pick up on any device.</p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="/login">Log in</a>
+              <a class="btn btn-outline" href="/register">Register</a>
             </div>
+            <p class="small-muted">Prefer to browse first? You can continue as a guest and add an account later.</p>
           </div>
-          <div class="trip-card">
-            <img src="https://images.unsplash.com/photo-1431274172761-fca41d930114?auto=format&fit=crop&w=1200&q=80" alt="Paris Eiffel Tower">
-            <div class="trip-info">
-              <h3>Paris Getaway</h3>
-              <p>4 Days</p>
-              <span>₹75,000</span>
-            </div>
-          </div>
-          <div class="trip-card">
-            <img src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=80" alt="Bali temple and landscape">
-            <div class="trip-info">
-              <h3>Bali Escape</h3>
-              <p>6 Days</p>
-              <span>₹60,000</span>
-            </div>
+          <div class="hero-card hero-where">
+            <p class="eyebrow">Step 2 · Where &amp; when</p>
+            <h2>Tell us your basics</h2>
+            <form id="heroWhereForm" class="where-form">
+              <label for="heroSourceInput">Leaving from</label>
+              <input type="text" id="heroSourceInput" placeholder="City or airport">
+              <label for="heroSearchInput">Heading to</label>
+              <input type="text" id="heroSearchInput" placeholder="City or airport" required>
+              <label for="heroDateInput">Travel date</label>
+              <input type="date" id="heroDateInput">
+              <button type="submit" id="heroSearchBtn" class="btn btn-primary full-width">Continue to planner</button>
+              <button type="button" id="heroOpenPlanner" class="btn btn-ghost full-width">Open full planner</button>
+            </form>
           </div>
         </div>
       </section>
-
-      <div style="text-align:center; margin-top:1.2rem;">
-        <p class="text-muted">Continue without an account</p>
-        <button class="btn btn-ghost" onclick="document.querySelector('[data-page=plan]').click()">Start Planning</button>
-      </div>
     </section>
-
     <!-- Plan Trip – Step-by-step wizard -->
     <section id="page-plan" class="page">
       <div class="container">
@@ -436,3 +420,4 @@
 </body>
 
 </html>
+

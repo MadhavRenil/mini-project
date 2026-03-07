@@ -1135,28 +1135,62 @@
   };
 
   // Hero Search Logic (New)
+  const heroWhereForm = document.getElementById('heroWhereForm');
   const heroSearchBtn = document.getElementById('heroSearchBtn');
   const heroSearchInput = document.getElementById('heroSearchInput');
+  const heroSourceInput = document.getElementById('heroSourceInput');
+  const heroDateInput = document.getElementById('heroDateInput');
+  const heroOpenPlanner = document.getElementById('heroOpenPlanner');
 
   attachCityAutocomplete(document.getElementById('planSource'));
   attachCityAutocomplete(document.getElementById('planDestination'));
   attachCityAutocomplete(heroSearchInput);
+  attachCityAutocomplete(heroSourceInput);
 
-  if (heroSearchBtn && heroSearchInput) {
-    heroSearchBtn.addEventListener('click', () => {
-      const destination = heroSearchInput.value.trim();
-      if (destination) {
-        // Switch to plan tab and pre-fill destination if possible, or just start planning
-        showPage('plan');
-        const planDestination = document.getElementById('planDestination');
-        if (planDestination) planDestination.value = destination;
-      } else {
-        showPage('plan');
+  function launchPlannerFromHero() {
+    const destination = heroSearchInput?.value.trim();
+    const source = heroSourceInput?.value.trim();
+    const travelDate = heroDateInput?.value;
+    showPage('plan');
+    const planDestination = document.getElementById('planDestination');
+    if (destination && planDestination) planDestination.value = destination;
+    const planSource = document.getElementById('planSource');
+    if (source && planSource) planSource.value = source;
+    const planDate = document.getElementById('planTravelDate');
+    if (travelDate && planDate) planDate.value = travelDate;
+    document.getElementById('wizardStep1')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  if (heroWhereForm) {
+    heroWhereForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      launchPlannerFromHero();
+    });
+  }
+
+  if (heroSearchInput) {
+    heroSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        launchPlannerFromHero();
       }
     });
   }
 
-  async function loadPreferences() {
+  if (heroSearchBtn) {
+    heroSearchBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      launchPlannerFromHero();
+    });
+  }
+
+  if (heroOpenPlanner) {
+    heroOpenPlanner.addEventListener('click', () => {
+      showPage('plan');
+    });
+  }
+
+async function loadPreferences() {
     try {
       const p = await fetchJSON(API + '/preferences');
       document.querySelectorAll('#formPreferences input[name="mode"]').forEach(cb => {
