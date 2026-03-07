@@ -1,5 +1,6 @@
 (function () {
   const API = '/api';
+  const params = new URLSearchParams(window.location.search);
 
   async function fetchJSON(url, options = {}) {
     const res = await fetch(url, { ...options, credentials: 'include' });
@@ -8,7 +9,20 @@
     return data;
   }
 
+  function clearForm(form) {
+    if (!form) return;
+    form.reset();
+    form.querySelectorAll('input').forEach((input) => {
+      input.value = '';
+    });
+  }
+
   const loginForm = document.getElementById('formLogin');
+  clearForm(loginForm);
+  if (params.get('logout') === '1') {
+    fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => { });
+    window.history.replaceState({}, '', window.location.pathname);
+  }
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -37,6 +51,7 @@
   }
 
   const registerForm = document.getElementById('formRegister');
+  clearForm(registerForm);
   if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();

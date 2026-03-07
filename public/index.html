@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Voyagr — AI Travel Planner</title>
+  <title>RouteX - AI Travel Planner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -18,7 +18,7 @@
 <body>
   <header class="site-header">
     <div class="container header-inner">
-      <a href="/app" class="logo">Voyag</a>
+      <a href="/app" class="logo" aria-label="RouteX home"><img src="/assets/routex-mark.svg" alt="RouteX"><span>RouteX</span></a>
       <nav class="nav">
         <a href="#" data-page="plan" class="nav-link">Plan Trip</a>
         <a href="#" data-page="history" class="nav-link">My Trips</a>
@@ -54,8 +54,17 @@
               <input type="text" id="heroSourceInput" placeholder="City or airport">
               <label for="heroSearchInput">Heading to</label>
               <input type="text" id="heroSearchInput" placeholder="City or airport" required>
-              <label for="heroDateInput">Travel date</label>
-              <input type="date" id="heroDateInput">
+              <div class="where-date-grid">
+                <div>
+                  <label for="heroDateInput">Departure date</label>
+                  <input type="date" id="heroDateInput">
+                </div>
+                <div>
+                  <label for="heroReturnDateInput">Return date</label>
+                  <input type="date" id="heroReturnDateInput">
+                </div>
+              </div>
+              <div id="heroTripLength" class="trip-length-pill">One-way trip</div>
               <button type="submit" id="heroSearchBtn" class="btn btn-primary full-width">Continue to planner</button>
               <button type="button" id="heroOpenPlanner" class="btn btn-ghost full-width">Open full planner</button>
             </form>
@@ -66,7 +75,7 @@
     <!-- Plan Trip – Step-by-step wizard -->
     <section id="page-plan" class="page active">
       <div class="container">
-        <h2>Plan Your Trip</h2>
+        <h2>Plan your RouteX trip</h2>
         <div class="wizard-steps">
           <div class="wizard-step active" data-step="1">1. Where & when</div>
           <div class="wizard-step" data-step="2">2. How to travel</div>
@@ -76,7 +85,7 @@
 
         <!-- Step 1: Where & When -->
         <div id="wizardStep1" class="wizard-panel card active">
-          <h3>Where are you going?</h3>
+          <h3>Where and when?</h3>
           <p class="form-error hidden" id="wizardStep1Error"></p>
           <div class="form-row">
             <label>Source</label>
@@ -88,10 +97,14 @@
             <input type="text" id="planDestination" name="destination" placeholder="City or airport" required>
             <p class="field-hint">City-level search gives best transport and stay matches.</p>
           </div>
-          <div class="form-row two-cols">
+          <div class="form-row three-cols">
             <div>
-              <label>Travel date</label>
+              <label>Departure date</label>
               <input type="date" id="planTravelDate" name="travel_date" required>
+            </div>
+            <div>
+              <label>Return date</label>
+              <input type="date" id="planReturnDate" name="return_date">
             </div>
             <div>
               <label>Number of travelers</label>
@@ -99,6 +112,7 @@
               <p class="field-hint">Pricing is calculated for all travelers.</p>
             </div>
           </div>
+          <div id="planTripLength" class="trip-length-pill trip-length-pill-muted">One-way trip</div>
           <button type="button" class="btn btn-primary" id="wizardNext1">Next →</button>
         </div>
 
@@ -352,7 +366,7 @@
       <div class="container">
         <h2>My travel history</h2>
         <div id="historyList" class="history-list"></div>
-        <p id="historyEmpty" class="empty-msg hidden">No trips saved yet. Plan a trip and save an itinerary.</p>
+          <p id="historyEmpty" class="empty-msg hidden">No trips saved yet. Book a trip or save an itinerary first.</p>
       </div>
     </section>
 
@@ -421,7 +435,7 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">Voyagr · AI-Assisted Multimodal Travel Planner &copy; 2026</div>
+    <div class="container">RouteX · AI-Assisted Multimodal Travel Planner &copy; 2026</div>
   </footer>
   <script src="/js/app.js"></script>
 </body>

@@ -1,0 +1,42 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pinGradient" x1="128" y1="30" x2="128" y2="222" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#21C5FF"/>
+      <stop offset="1" stop-color="#0AAABF"/>
+    </linearGradient>
+    <linearGradient id="orbitGradient" x1="30" y1="154" x2="226" y2="154" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1AA6FF"/>
+      <stop offset="1" stop-color="#4EE0DB"/>
+    </linearGradient>
+    <linearGradient id="circuitGradient" x1="36" y1="76" x2="108" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#66E8E1"/>
+      <stop offset="1" stop-color="#0C8DFF"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M128 30C164.451 30 194 59.5492 194 96C194 145.5 128 222 128 222C128 222 62 145.5 62 96C62 59.5492 91.5492 30 128 30Z" fill="url(#pinGradient)"/>
+  <path d="M128 62C146.778 62 162 77.2223 162 96C162 114.778 146.778 130 128 130C109.222 130 94 114.778 94 96C94 77.2223 109.222 62 128 62Z" fill="#081324"/>
+  <path d="M94 111L128 152V222C128 222 87.3307 174.694 70.0938 132.693L94 111Z" fill="#0EABC2" fill-opacity="0.78"/>
+  <path d="M162 111L128 152V222C128 222 168.669 174.694 185.906 132.693L162 111Z" fill="#0A6BCA" fill-opacity="0.66"/>
+
+  <path d="M30 154C44.8333 131.167 73.7 115.4 116.5 106.7C159.3 98 198.467 102.867 226 121.3" stroke="url(#orbitGradient)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M33 157C50.8333 178.333 83.7667 187.267 131.8 183.8C179.833 180.333 211.9 166.233 228 141.5" stroke="#0B4EA9" stroke-width="11" stroke-linecap="round" opacity="0.88"/>
+
+  <path d="M152 109C177.667 110.333 195.333 118 205 132" stroke="#11B6FF" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+
+  <g fill="none" stroke="url(#circuitGradient)" stroke-linecap="round" stroke-width="8">
+    <path d="M36 66H82L103 81"/>
+    <path d="M30 87H76L92 98"/>
+    <path d="M40 108H82L94 111"/>
+  </g>
+  <g fill="#0E1225" stroke="url(#circuitGradient)" stroke-width="8">
+    <circle cx="36" cy="66" r="9"/>
+    <circle cx="30" cy="87" r="9"/>
+    <circle cx="40" cy="108" r="9"/>
+    <circle cx="103" cy="81" r="7"/>
+    <circle cx="92" cy="98" r="7"/>
+    <circle cx="94" cy="111" r="7"/>
+  </g>
+
+  <path d="M210 98L234 82C236.981 80.0128 240.995 80.6565 243.194 83.484C245.364 86.2744 244.949 90.2934 242.246 92.581L227 105L235 119C236.878 122.286 235.89 126.46 232.742 128.562C229.692 130.599 225.595 130.057 223.192 127.286L213 115L198 118.5L194 112L206 106L188 90.5L192.5 84.5L210 98Z" fill="#FFBC4B"/>
+</svg>

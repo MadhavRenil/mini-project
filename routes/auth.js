@@ -54,8 +54,15 @@ router.post('/login', (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
+  if (req.session) {
+    req.session.userId = null;
+    req.session.userEmail = null;
+    req.session.userName = null;
+  }
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.json({ success: true });
+  });
 });
 
 router.get('/me', (req, res) => {

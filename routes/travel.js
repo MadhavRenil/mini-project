@@ -17,6 +17,7 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     source,
     destination,
     travel_date,
+    return_date,
     start_date,
     end_date,
     budget,
@@ -26,7 +27,9 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     hotel_type,
     hotel_nights,
     hotel_adults,
-    selected_hotel
+    selected_hotel,
+    source_id,
+    destination_id
   } = req.body;
   if (!source || !destination) {
     return res.status(400).json({ error: 'Source and destination required' });
@@ -40,7 +43,11 @@ router.post('/plan', optionalAuth(), async (req, res) => {
   let apiFlights = null;
   let flightDataSource = null;
   try {
-    const transport = await getTransportOptions(source, destination, travelDate, numT, transport_choice);
+    const transport = await getTransportOptions(source, destination, travelDate, numT, transport_choice, {
+      returnDate: return_date || end_date || null,
+      departureId: source_id || null,
+      arrivalId: destination_id || null
+    });
     if (transport.hasLiveFlightData && transport.flightOptions && transport.flightOptions.length) {
       apiFlights = transport.flightOptions;
       flightDataSource = transport.flightSource || null;
@@ -67,7 +74,8 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     source,
     destination,
     travel_date: travelDate,
-    end_date: end_date || null,
+    return_date: return_date || end_date || null,
+    end_date: end_date || return_date || null,
     budget: budget != null ? Number(budget) : null,
     preference_type: preference_type || null,
     num_travelers: numT,
@@ -189,7 +197,8 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
     selected_events,
     itinerary,
     total_cost,
-    payment_ref
+    payment_ref,
+    return_date
   } = req.body;
   if (!source || !destination || !selected_option) {
     return res.status(400).json({ error: 'Source, destination, and selected option required' });
@@ -201,6 +210,7 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
     : { ...selected_option };
   storedSelection.selected_events = Array.isArray(selected_events) ? selected_events : [];
   storedSelection.final_itinerary = Array.isArray(itinerary) ? itinerary : null;
+  storedSelection.return_date = return_date || null;
   const optionJson = JSON.stringify(storedSelection);
   const cost = total_cost != null ? Number(total_cost) : (selected_option.total_cost != null ? selected_option.total_cost : 0);
   const stmt = db.prepare(`
@@ -221,6 +231,35 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
     payment_ref || null,
     'confirmed'
   );
+
+  if (userId) {
+    const optionForHistory = typeof selected_option === 'string' ? null : selected_option;
+    const historyModes = Array.isArray(optionForHistory?.modes)
+      ? optionForHistory.modes
+      : Array.isArray(optionForHistory?.legs)
+        ? optionForHistory.legs.map((leg) => leg.modeName || leg.mode).filter(Boolean)
+        : [];
+
+    const historyStmt = db.prepare(`
+      INSERT INTO travel_history
+      (user_id, source, destination, start_date, end_date, modes, distance_km, duration_minutes, estimated_cost, itinerary_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    historyStmt.run(
+      userId,
+      source,
+      destination,
+      travel_date || null,
+      return_date || null,
+      JSON.stringify(historyModes),
+      optionForHistory?.total_distance_km ?? null,
+      optionForHistory?.total_duration_minutes ?? null,
+      cost,
+      JSON.stringify(Array.isArray(itinerary) ? itinerary : storedSelection)
+    );
+  }
+
   res.status(201).json({
     success: true,
     booking_id: result.lastInsertRowid,

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Register | Voyagr</title>
+  <title>Register | RouteX</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -11,13 +11,13 @@
 </head>
 <body class="auth-page">
   <main class="auth-shell">
-    <a href="/app" class="logo">Voyag</a>
+    <a href="/app" class="logo auth-brand" aria-label="RouteX home"><img src="/assets/routex-mark.svg" alt="RouteX"><span>RouteX</span></a>
     <section class="card">
-      <h1>Create account</h1>
-      <p>Register once to sync trip history and settings.</p>
-      <form id="formRegister" class="auth-form">
-        <input type="text" name="name" placeholder="Full Name (optional)" autocomplete="name">
-        <input type="email" name="email" placeholder="Email" autocomplete="email" required>
+      <h1>Create your RouteX account</h1>
+      <p>Register once to sync trip history, itineraries, and settings.</p>
+      <form id="formRegister" class="auth-form" autocomplete="off">
+        <input type="text" name="name" placeholder="Full Name (optional)" autocomplete="off">
+        <input type="email" name="email" placeholder="Email" autocomplete="off" required>
         <input type="password" name="password" placeholder="Password" autocomplete="new-password" minlength="6" required>
         <button type="submit" class="btn btn-primary" id="btnRegisterSubmit">Create Account</button>
       </form>

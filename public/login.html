@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login | Voyagr</title>
+  <title>Login | RouteX</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -11,13 +11,13 @@
 </head>
 <body class="auth-page">
   <main class="auth-shell">
-    <a href="/app" class="logo">Voyag</a>
+    <a href="/app" class="logo auth-brand" aria-label="RouteX home"><img src="/assets/routex-mark.svg" alt="RouteX"><span>RouteX</span></a>
     <section class="card">
-      <h1>Welcome back</h1>
-      <p>Log in to access your saved trips and preferences.</p>
-      <form id="formLogin" class="auth-form">
-        <input type="email" name="email" placeholder="Email" autocomplete="email" required>
-        <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+      <h1>Welcome to RouteX</h1>
+      <p>Log in to access your saved trips, live routes, and preferences.</p>
+      <form id="formLogin" class="auth-form" autocomplete="off">
+        <input type="email" name="email" placeholder="Email" autocomplete="off" required>
+        <input type="password" name="password" placeholder="Password" autocomplete="off" required>
         <button type="submit" class="btn btn-primary" id="btnLoginSubmit">Log In</button>
       </form>
       <p id="loginError" class="auth-error"></p>
