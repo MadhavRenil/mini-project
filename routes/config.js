@@ -6,16 +6,18 @@ const path = require('path');
 router.get('/', (req, res) => {
   res.json({
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
-    rapidApiKey: process.env.RAPIDAPI_KEY ? 'Has Key' : null
+    rapidApiKey: process.env.RAPIDAPI_KEY ? 'Has Key' : null,
+    serpApiKey: process.env.SERPAPI_KEY ? 'Has Key' : null
   });
 });
 
 router.post('/', (req, res) => {
-  const { rapidApiKey, googleMapsApiKey } = req.body;
+  const { rapidApiKey, googleMapsApiKey, serpApiKey } = req.body;
 
-  if (rapidApiKey || googleMapsApiKey) {
+  if (rapidApiKey || googleMapsApiKey || serpApiKey) {
     if (rapidApiKey) process.env.RAPIDAPI_KEY = rapidApiKey;
     if (googleMapsApiKey) process.env.GOOGLE_MAPS_API_KEY = googleMapsApiKey;
+    if (serpApiKey) process.env.SERPAPI_KEY = serpApiKey;
 
     // Persist to .env
     const envPath = path.join(__dirname, '..', '.env');
@@ -28,7 +30,8 @@ router.post('/', (req, res) => {
 
       const newValues = {
         'RAPIDAPI_KEY': rapidApiKey,
-        'GOOGLE_MAPS_API_KEY': googleMapsApiKey
+        'GOOGLE_MAPS_API_KEY': googleMapsApiKey,
+        'SERPAPI_KEY': serpApiKey
       };
 
       for (const [key, val] of Object.entries(newValues)) {

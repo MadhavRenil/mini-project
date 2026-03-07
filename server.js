@@ -87,4 +87,6 @@ server.on('error', (err) => {
   console.error('[server-error]', err.message);
 });
 
+module.exports = { app, server };
+
 

@@ -143,7 +143,7 @@
       total_cost: Math.max(0, safeNum(selectedHotel.price, 0)) * nights,
       rating: selectedHotel.rating != null ? safeNum(selectedHotel.rating, null) : null,
       simulated: !!selectedHotel.simulated,
-      source: selectedHotel.simulated ? 'simulated' : 'api',
+      source: selectedHotel.source || (selectedHotel.simulated ? 'simulated' : 'api'),
       distance_to_center_km: selectedHotel.distance_to_center_km != null ? safeNum(selectedHotel.distance_to_center_km, null) : null,
       distance_to_airport_km: selectedHotel.distance_to_airport_km != null ? safeNum(selectedHotel.distance_to_airport_km, null) : null,
       cancellation: selectedHotel.cancellation || null,
@@ -667,30 +667,104 @@
 
   document.getElementById('btnDownloadTrip')?.addEventListener('click', window.downloadTripPDF);
 
+  function buildSelectedEventsPreview(events, limit = 2) {
+    const selected = Array.isArray(events) ? events : [];
+    if (!selected.length) {
+      return '<div class="section-empty">No local events selected yet. You can continue with the base trip plan.</div>';
+    }
+
+    const visible = limit > 0 ? selected.slice(0, limit) : selected;
+    const remaining = limit > 0 ? Math.max(0, selected.length - visible.length) : 0;
+
+    return `
+      <div class="event-preview-list">
+        ${visible.map((event) => `
+          <div class="selected-event-item">
+            <strong>${escapeHtml(event.name)}</strong>
+            <div class="meta">${escapeHtml(event.venue || 'Venue TBA')}${event.when ? ` | ${escapeHtml(event.when)}` : event.date ? ` | ${escapeHtml(event.date)}` : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+      ${remaining ? `<div class="meta" style="margin-top:0.55rem;">+${remaining} more selected event(s) will appear in the final itinerary.</div>` : ''}
+    `;
+  }
+
+  function buildItineraryGlimpseHtml(itinerary) {
+    if (!Array.isArray(itinerary) || !itinerary.length) {
+      return '<div class="section-empty">Generate the itinerary to preview the trip structure before payment.</div>';
+    }
+
+    const firstDay = itinerary[0] || { day: 1, activities: [] };
+    const activities = Array.isArray(firstDay.activities) ? firstDay.activities.slice(0, 3) : [];
+    const remainingDays = Math.max(0, itinerary.length - 1);
+
+    return `
+      <div class="glimpse-list">
+        <div class="glimpse-item">
+          <strong>Day ${escapeHtml(firstDay.day)}</strong>
+          <div class="meta" style="margin-top:0.35rem;">
+            ${activities.length
+              ? activities.map((activity) => escapeHtml(`${activity.time || 'TBA'} - ${activity.title || 'Planned activity'}`)).join('<br>')
+              : 'Activities will appear after payment.'}
+          </div>
+        </div>
+      </div>
+      ${remainingDays ? `<div class="meta" style="margin-top:0.55rem;">+${remainingDays} more planned day(s) unlock after the demo payment step.</div>` : ''}
+    `;
+  }
+
+  function buildFinalItineraryHtml(itinerary) {
+    if (!Array.isArray(itinerary) || !itinerary.length) {
+      return '<div class="section-empty">No itinerary generated for this booking.</div>';
+    }
+
+    return `
+      <div class="itinerary-timeline">
+        ${itinerary.map((day) => `
+          <div class="day-plan">
+            <div class="day-header">Day ${escapeHtml(day.day)}</div>
+            ${(Array.isArray(day.activities) ? day.activities : []).map((activity) => `
+              <div class="activity-item">
+                <span class="activity-time">${escapeHtml(activity.time || 'TBA')}</span>
+                <div class="activity-content">
+                  <span class="activity-title">${escapeHtml(activity.title || 'Planned activity')}</span>
+                  <span class="activity-tag">${escapeHtml(activity.type || 'activity')}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   function renderReviewSummary() {
     const el = document.getElementById('reviewSummary');
     if (!el || !planState) return;
+    syncPlanSelectedEvents();
     const opt = planState.selected_option;
     const cost = opt.total_cost != null ? opt.total_cost : (opt.total_with_hotel != null ? opt.total_with_hotel : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0));
-    const modes = (opt.modes || opt.legs?.map(l => l.modeName || l.mode) || []).join(' → ');
+    const modes = (opt.modes || opt.legs?.map((leg) => leg.modeName || leg.mode) || []).join(' -> ');
     const hotelLine = opt.hotel
-      ? `<div class="meta">Stay: ${opt.hotel.name} (${opt.hotel.total_nights} night(s)) · ₹${safeNum(opt.hotel.price_per_night, 0).toLocaleString('en-IN')}/night · Total ₹${safeNum(opt.hotel.total_cost, 0).toLocaleString('en-IN')}</div>`
+      ? `<div class="meta">Stay: ${escapeHtml(opt.hotel.name)} (${escapeHtml(opt.hotel.total_nights)} night(s)) | INR ${safeNum(opt.hotel.price_per_night, 0).toLocaleString('en-IN')}/night | Total INR ${safeNum(opt.hotel.total_cost, 0).toLocaleString('en-IN')}</div>`
       : '';
-    el.innerHTML = `
-      <div class="route">${planState.source} → ${planState.destination}</div>
-      <div class="meta">Travel date: ${planState.travel_date || '—'} · Travelers: ${planState.num_travelers}</div>
-      <div class="meta">${modes}</div>
-      ${hotelLine}
-      <div class="meta" style="margin-top:0.5rem; font-weight:600;">Total: ₹${(cost || 0).toFixed(2)}</div>
-    `;
 
-    if (planState.itinerary) {
-      let itHtml = '<div style="margin-top:1rem; border-top:1px solid #eee; padding-top:1rem;"><strong>Itinerary Preview</strong></div>';
-      planState.itinerary.forEach(day => {
-        itHtml += `<div style="margin-top:0.5rem;"><strong>Day ${day.day}</strong>: ${day.activities.map(a => a.title).join(', ')}</div>`;
-      });
-      el.innerHTML += itHtml;
-    }
+    el.innerHTML = `
+      <div class="route">${escapeHtml(planState.source)} -> ${escapeHtml(planState.destination)}</div>
+      <div class="meta">Travel date: ${escapeHtml(planState.travel_date || 'TBD')} | Travelers: ${escapeHtml(planState.num_travelers)}</div>
+      <div class="meta">${escapeHtml(modes || 'Multimodal')}</div>
+      ${hotelLine}
+      <div class="meta" style="margin-top:0.5rem; font-weight:600;">Total: INR ${(cost || 0).toFixed(2)}</div>
+      <div class="review-block">
+        <div class="review-block-title">Selected local events</div>
+        ${buildSelectedEventsPreview(planState.selected_events, 2)}
+      </div>
+      <div class="review-block">
+        <div class="review-block-title">Itinerary glimpse</div>
+        <div class="meta">Only a short preview is shown here. The full itinerary appears after payment.</div>
+        ${buildItineraryGlimpseHtml(planState.itinerary)}
+      </div>
+    `;
   }
 
   document.getElementById('btnProceedPayment')?.addEventListener('click', () => showPage('payment'));
@@ -725,6 +799,8 @@
           preference_type: planState.preference_type,
           num_travelers: planState.num_travelers,
           selected_option: planState.selected_option,
+          selected_events: planState.selected_events || [],
+          itinerary: planState.itinerary || [],
           total_cost,
           payment_ref: pay.payment_ref
         })
@@ -743,13 +819,23 @@
   function renderConfirmation() {
     const el = document.getElementById('confirmationDetails');
     if (!el || !planState) return;
+    syncPlanSelectedEvents();
     const opt = planState.selected_option;
     const cost = opt.total_cost != null ? opt.total_cost : (opt.legs || []).reduce((s, l) => s + (l.estimated_cost || 0), 0);
+    const selectedEvents = Array.isArray(planState.selected_events) ? planState.selected_events : [];
     el.innerHTML = `
-      <div class="route">${planState.source} → ${planState.destination}</div>
-      <div class="meta">Travel date: ${planState.travel_date || '—'} · Travelers: ${planState.num_travelers}</div>
-      <div class="meta">Total paid: ₹${cost.toFixed(2)}</div>
-      <div class="meta" style="margin-top:0.5rem;">Booking #${planState.booking_id || '—'} · Payment ref: ${planState.payment_ref || '—'}</div>
+      <div class="route">${escapeHtml(planState.source)} -> ${escapeHtml(planState.destination)}</div>
+      <div class="meta">Travel date: ${escapeHtml(planState.travel_date || 'TBD')} | Travelers: ${escapeHtml(planState.num_travelers)}</div>
+      <div class="meta">Total paid: INR ${cost.toFixed(2)}</div>
+      <div class="meta" style="margin-top:0.5rem;">Booking #${escapeHtml(planState.booking_id || 'TBD')} | Payment ref: ${escapeHtml(planState.payment_ref || 'TBD')}</div>
+      <div class="confirmation-block">
+        <div class="confirmation-block-title">Local events in this booking</div>
+        ${buildSelectedEventsPreview(selectedEvents, 0)}
+      </div>
+      <div class="confirmation-block">
+        <div class="confirmation-block-title">Final itinerary</div>
+        ${buildFinalItineraryHtml(planState.itinerary)}
+      </div>
       <p style="margin-top:0.75rem; color: var(--success);">Data saved for future learning.</p>
     `;
   }
@@ -975,21 +1061,114 @@
     }
   }
 
-  async function loadEvents(destination) {
+  function updateSelectedEventsCount() {
+    const pill = document.getElementById('eventsSelectedCount');
+    if (!pill) return;
+    const count = selectedDestinationEvents.length;
+    pill.textContent = `${count} selected`;
+    pill.classList.toggle('hidden', count === 0);
+  }
+
+  function resetGeneratedItinerary() {
+    if (!planState) return;
+    planState.itinerary = null;
+    if (typeof itineraryTimeline !== 'undefined' && itineraryTimeline) itineraryTimeline.innerHTML = '';
+    if (typeof itinerarySection !== 'undefined' && itinerarySection) itinerarySection.classList.add('hidden');
+  }
+
+  function toggleSelectedDestinationEvent(eventId) {
+    const normalizedId = String(eventId || '');
+    if (!normalizedId) return;
+
+    const existing = selectedDestinationEvents.find((event) => String(event.id) === normalizedId);
+    if (existing) {
+      selectedDestinationEvents = selectedDestinationEvents.filter((event) => String(event.id) !== normalizedId);
+    } else {
+      const picked = destinationEvents.find((event) => String(event.id) === normalizedId);
+      if (picked) selectedDestinationEvents = [...selectedDestinationEvents, { ...picked }];
+    }
+
+    syncPlanSelectedEvents();
+    resetGeneratedItinerary();
+    renderDestinationEvents();
+    updateSelectedEventsCount();
+  }
+
+  function renderDestinationEvents() {
     const list = document.getElementById('eventsList');
     if (!list) return;
-    try {
-      const { events } = await fetchJSON(API + '/events?city=' + encodeURIComponent(destination));
-      list.innerHTML = events.length
-        ? events.map(e => `
-            <div class="event-card">
-              <strong>${e.name}</strong>
-              <span>${e.type} · ${e.venue} · ${e.date}</span>
+
+    if (!destinationEvents.length) {
+      list.innerHTML = '<div class="section-empty">No local events found for this city right now.</div>';
+      updateSelectedEventsCount();
+      return;
+    }
+
+    const selectedIds = new Set(selectedDestinationEvents.map((event) => String(event.id)));
+    list.innerHTML = destinationEvents.map((event) => {
+      const isSelected = selectedIds.has(String(event.id));
+      const timing = event.when || event.date || 'Date TBA';
+      const description = event.description
+        ? `<p>${escapeHtml(event.description)}</p>`
+        : '';
+      const linkHtml = event.link
+        ? `<a href="${escapeHtml(event.link)}" target="_blank" rel="noreferrer" class="btn btn-secondary">Open event</a>`
+        : '';
+
+      return `
+        <div class="event-card ${isSelected ? 'selected' : ''}">
+          <div class="event-card-head">
+            <div>
+              <strong>${escapeHtml(event.name)}</strong>
+              <div class="event-card-meta">
+                <span>${escapeHtml(event.venue || 'Venue TBA')}</span>
+                <span>${escapeHtml(timing)}</span>
+              </div>
             </div>
-          `).join('')
-        : '<div class="section-empty">No local events found for this city right now.</div>';
+            <span class="event-badge">${escapeHtml(event.type || 'Event')}</span>
+          </div>
+          ${description}
+          <div class="event-card-actions">
+            ${linkHtml}
+            <button type="button" class="btn ${isSelected ? 'btn-primary' : 'btn-ghost'}" data-event-toggle="${escapeHtml(event.id)}">${isSelected ? 'Selected' : 'Add to trip'}</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('[data-event-toggle]').forEach((button) => {
+      button.addEventListener('click', () => toggleSelectedDestinationEvent(button.dataset.eventToggle));
+    });
+
+    updateSelectedEventsCount();
+  }
+
+  async function loadEvents(destination, travelDate = null) {
+    const list = document.getElementById('eventsList');
+    if (!list) return;
+
+    const queryKey = `${String(destination || '').trim().toLowerCase()}|${travelDate || ''}`;
+    list.innerHTML = '<p class="loading">Loading local events...</p>';
+
+    try {
+      const params = new URLSearchParams({ city: destination });
+      if (travelDate) params.set('travel_date', travelDate);
+      const { events } = await fetchJSON(API + '/events?' + params.toString());
+      const previousSelectedIds = new Set(selectedDestinationEvents.map((event) => String(event.id)));
+      destinationEvents = Array.isArray(events) ? events : [];
+      selectedDestinationEvents = destinationEventsKey === queryKey
+        ? destinationEvents.filter((event) => previousSelectedIds.has(String(event.id))).map((event) => ({ ...event }))
+        : [];
+      destinationEventsKey = queryKey;
+      syncPlanSelectedEvents();
+      renderDestinationEvents();
     } catch (_) {
+      destinationEvents = [];
+      selectedDestinationEvents = [];
+      destinationEventsKey = queryKey;
+      syncPlanSelectedEvents();
       list.innerHTML = '<div class="section-empty">Could not load destination events at the moment.</div>';
+      updateSelectedEventsCount();
     }
   }
 
@@ -1291,17 +1470,18 @@ async function loadPreferences() {
     formSettings.addEventListener('submit', async (e) => {
       e.preventDefault();
       const saveBtn = formSettings.querySelector('button[type="submit"]');
+      const serpApiKey = formSettings.serpApiKey.value.trim();
       const rapidApiKey = formSettings.rapidApiKey.value.trim();
       const googleMapsApiKey = formSettings.googleMapsApiKey.value.trim();
 
-      if (!rapidApiKey && !googleMapsApiKey) return;
+      if (!serpApiKey && !rapidApiKey && !googleMapsApiKey) return;
 
       try {
-        setButtonLoading(saveBtn, 'Saving…', true);
+        setButtonLoading(saveBtn, 'Saving...', true);
         await fetchJSON(API + '/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rapidApiKey, googleMapsApiKey })
+          body: JSON.stringify({ serpApiKey, rapidApiKey, googleMapsApiKey })
         });
         notify('Settings saved. Reloading…', 'success');
         window.location.reload();
@@ -1362,6 +1542,7 @@ async function loadPreferences() {
       submitBtn.disabled = true;
 
       try {
+        syncPlanSelectedEvents();
         const { itinerary } = await fetchJSON(API + '/travel/itinerary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1369,6 +1550,7 @@ async function loadPreferences() {
             destination,
             days,
             interests,
+            selected_events: planState?.selected_events || [],
             context: `Budget: ${planState?.budget}, Style: ${planState?.preference_type}`
           })
         });
@@ -1389,15 +1571,16 @@ async function loadPreferences() {
 
   function renderItinerary(itinerary) {
     if (!itineraryTimeline) return;
-    itineraryTimeline.innerHTML = itinerary.map(day => `
+    if (itinerarySection) itinerarySection.classList.remove('hidden');
+    itineraryTimeline.innerHTML = itinerary.map((day) => `
       <div class="day-plan">
-        <div class="day-header">Day ${day.day}</div>
-        ${day.activities.map(act => `
+        <div class="day-header">Day ${escapeHtml(day.day)}</div>
+        ${(Array.isArray(day.activities) ? day.activities : []).map((activity) => `
           <div class="activity-item">
-            <span class="activity-time">${act.time}</span>
+            <span class="activity-time">${escapeHtml(activity.time || 'TBA')}</span>
             <div class="activity-content">
-              <span class="activity-title">${act.title}</span>
-              <span class="activity-tag">${act.type}</span>
+              <span class="activity-title">${escapeHtml(activity.title || 'Planned activity')}</span>
+              <span class="activity-tag">${escapeHtml(activity.type || 'activity')}</span>
             </div>
           </div>
         `).join('')}
@@ -1429,7 +1612,8 @@ async function loadPreferences() {
       budget: lastPlanData.budget != null ? parseFloat(lastPlanData.budget) : null,
       preference_type: lastPlanData.preference_type || null,
       num_travelers: parseInt(lastPlanData.num_travelers, 10) || 1,
-      selected_option: opt
+      selected_option: opt,
+      selected_events: getSelectedEventsForPlan()
     };
     showItineraryModal();
   };
