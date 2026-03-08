@@ -32,7 +32,9 @@ const CATEGORY_PROFILES = {
 const GALLERY_THEMES = [
   { accent: '#2dc7ff', secondary: '#0f5fb6', label: 'Lobby preview' },
   { accent: '#ffc35c', secondary: '#f27d42', label: 'Room preview' },
-  { accent: '#71e6b5', secondary: '#159f7f', label: 'View preview' }
+  { accent: '#71e6b5', secondary: '#159f7f', label: 'View preview' },
+  { accent: '#ff9a7a', secondary: '#d65252', label: 'Dining preview' },
+  { accent: '#8c9eff', secondary: '#4c5fd7', label: 'Pool preview' }
 ];
 
 function inferCategory(price) {
@@ -95,7 +97,7 @@ function buildHotelGallery(destination, hotelName, category, images = []) {
     label: theme.label,
     theme
   }));
-  return uniqueStrings([...providerImages, ...fallbackImages]).slice(0, 6);
+  return uniqueStrings([...providerImages, ...fallbackImages]).slice(0, 8);
 }
 
 function attachHotelGallery(hotel, destination) {

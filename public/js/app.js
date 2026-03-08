@@ -709,14 +709,16 @@
       ...(Array.isArray(hotel?.images) ? hotel.images : []),
       hotel?.image || ''
     ]);
-    if (providerImages.length >= 3) return providerImages.slice(0, 6);
+    if (providerImages.length >= 3) return providerImages.slice(0, 8);
     const fallbackThemes = [
       { start: '#2ec8ff', end: '#0b5fb4', label: 'Lobby' },
       { start: '#ffc55b', end: '#ef7f41', label: 'Room' },
-      { start: '#74e6ba', end: '#10997b', label: 'View' }
+      { start: '#74e6ba', end: '#10997b', label: 'View' },
+      { start: '#ff9b7c', end: '#d65050', label: 'Dining' },
+      { start: '#8e9bff', end: '#4e5ed8', label: 'Pool' }
     ];
     const placeholders = fallbackThemes.map((theme) => buildHotelPhotoPlaceholder(hotel, theme.label, theme));
-    return uniqueStrings([...providerImages, ...placeholders]).slice(0, 6);
+    return uniqueStrings([...providerImages, ...placeholders]).slice(0, 8);
   }
 
   function isSameHotelSelection(left, right) {
@@ -1047,7 +1049,10 @@
         const assignedNights = selectedEntry ? Math.max(0, parseInt(selectedEntry.assigned_nights ?? selectedEntry.total_nights ?? 0, 10) || 0) : 0;
         const distanceCenter = hotel.distance_to_center_km != null ? `${safeNum(hotel.distance_to_center_km, 0).toFixed(1)} km to center` : 'Center distance n/a';
         const distanceAirport = hotel.distance_to_airport_km != null ? `${safeNum(hotel.distance_to_airport_km, 0).toFixed(1)} km to airport` : 'Airport distance n/a';
-        const galleryCount = getHotelGallerySources(hotel).length;
+        const gallerySources = getHotelGallerySources(hotel);
+        const galleryCount = gallerySources.length;
+        const galleryPreview = gallerySources.slice(0, 4);
+        const galleryOverflow = Math.max(0, galleryCount - galleryPreview.length);
         return `
           <div class="hotel-card card ${assignedNights ? 'selected' : ''}" data-hotel-id="${id}">
             <div class="hotel-head">
@@ -1069,6 +1074,23 @@
               <span class="hotel-tag">${escapeHtml(hotel.category || 'stay')}</span>
               <span class="hotel-tag">${escapeHtml(hotel.cancellation || 'Cancellation info unavailable')}</span>
               <span class="hotel-tag">${escapeHtml(hotel.payment || 'Payment info unavailable')}</span>
+            </div>
+            <div class="hotel-preview-strip">
+              ${galleryPreview.map((src, photoIndex) => `
+                <button
+                  type="button"
+                  class="hotel-preview-thumb btn-view-hotel-photos"
+                  data-hotel-id="${id}"
+                  aria-label="Open photo ${photoIndex + 1} for ${escapeHtml(hotel.name || 'Hotel')}"
+                >
+                  <img src="${src}" alt="${escapeHtml((hotel.name || 'Hotel') + ' preview ' + (photoIndex + 1))}" loading="lazy">
+                </button>
+              `).join('')}
+              ${galleryOverflow ? `
+                <button type="button" class="hotel-preview-thumb hotel-preview-more btn-view-hotel-photos" data-hotel-id="${id}">
+                  +${galleryOverflow} more
+                </button>
+              ` : ''}
             </div>
             ${nights > 1 ? `
               <div class="hotel-allocation-row">

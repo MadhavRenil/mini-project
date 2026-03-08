@@ -79,13 +79,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`RouteX running at http://localhost:${PORT}`);
-});
+let server = null;
 
-server.on('error', (err) => {
-  console.error('[server-error]', err.message);
-});
+if (require.main === module) {
+  server = app.listen(PORT, () => {
+    console.log(`RouteX running at http://localhost:${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    console.error('[server-error]', err.message);
+  });
+}
 
 module.exports = { app, server };
 
