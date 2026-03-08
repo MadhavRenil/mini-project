@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { fetchHotelsRealTime, HOTEL_TYPES } = require('../lib/apis');
 
 const router = express.Router();
@@ -29,6 +29,12 @@ const CATEGORY_PROFILES = {
   apartment: { min: 2200, max: 9000, minRating: 6.5, maxRating: 9.0 }
 };
 
+const GALLERY_THEMES = [
+  { accent: '#2dc7ff', secondary: '#0f5fb6', label: 'Lobby preview' },
+  { accent: '#ffc35c', secondary: '#f27d42', label: 'Room preview' },
+  { accent: '#71e6b5', secondary: '#159f7f', label: 'View preview' }
+];
+
 function inferCategory(price) {
   const p = Number(price) || 0;
   if (p <= 1800) return 'hostel';
@@ -40,6 +46,71 @@ function inferCategory(price) {
 
 function cityLabel(destination) {
   return (destination || 'City').trim().split(/\s+/).map(p => p[0] ? p[0].toUpperCase() + p.slice(1).toLowerCase() : '').join(' ');
+}
+
+function uniqueStrings(values) {
+  return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === 'string' && value.trim()))];
+}
+
+function svgDataUri(svg) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function buildHotelPhotoPlaceholder({ destination, hotelName, category, label, theme }) {
+  const city = cityLabel(destination || 'Destination');
+  const safeHotel = String(hotelName || 'Hotel').slice(0, 34);
+  const safeCategory = String(category || 'stay').replace(/[^a-z0-9 ]/gi, '').slice(0, 20);
+  const safeLabel = String(label || 'Preview').slice(0, 22);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="${safeHotel} ${safeLabel}">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${theme.accent}" />
+          <stop offset="100%" stop-color="${theme.secondary}" />
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="900" fill="#09111f" />
+      <rect x="54" y="54" width="1092" height="792" rx="40" fill="url(#g)" opacity="0.9" />
+      <circle cx="980" cy="180" r="140" fill="rgba(255,255,255,0.16)" />
+      <circle cx="210" cy="720" r="180" fill="rgba(255,255,255,0.12)" />
+      <rect x="120" y="144" width="440" height="20" rx="10" fill="rgba(255,255,255,0.22)" />
+      <rect x="120" y="188" width="300" height="14" rx="7" fill="rgba(255,255,255,0.18)" />
+      <rect x="120" y="510" width="520" height="170" rx="26" fill="rgba(4,12,24,0.22)" />
+      <rect x="700" y="306" width="262" height="262" rx="28" fill="rgba(4,12,24,0.16)" />
+      <text x="120" y="330" fill="#ffffff" font-family="Arial, sans-serif" font-size="74" font-weight="700">${safeHotel}</text>
+      <text x="120" y="404" fill="rgba(255,255,255,0.88)" font-family="Arial, sans-serif" font-size="36">${city} | ${safeCategory}</text>
+      <text x="120" y="592" fill="#ffffff" font-family="Arial, sans-serif" font-size="54" font-weight="700">${safeLabel}</text>
+      <text x="120" y="648" fill="rgba(255,255,255,0.86)" font-family="Arial, sans-serif" font-size="28">Generated preview used when the provider does not include enough hotel photos.</text>
+    </svg>
+  `.trim();
+  return svgDataUri(svg);
+}
+
+function buildHotelGallery(destination, hotelName, category, images = []) {
+  const providerImages = uniqueStrings(images);
+  const fallbackImages = GALLERY_THEMES.map((theme) => buildHotelPhotoPlaceholder({
+    destination,
+    hotelName,
+    category,
+    label: theme.label,
+    theme
+  }));
+  return uniqueStrings([...providerImages, ...fallbackImages]).slice(0, 6);
+}
+
+function attachHotelGallery(hotel, destination) {
+  const category = hotel.category || inferCategory(hotel.price);
+  const providerImages = uniqueStrings([
+    ...(Array.isArray(hotel.images) ? hotel.images : []),
+    hotel.image || ''
+  ]);
+  const gallery = buildHotelGallery(destination, hotel.name, category, providerImages);
+  return {
+    ...hotel,
+    category,
+    image: gallery[0] || null,
+    images: gallery
+  };
 }
 
 function buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelType }) {
@@ -65,7 +136,7 @@ function buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelTyp
     const distanceToAirport = (4 + rand() * 26).toFixed(1);
     const cancellation = rand() > 0.35 ? 'Free cancellation' : 'Non-refundable';
     const payment = rand() > 0.5 ? 'Pay at property' : 'Pay now';
-    results.push({
+    results.push(attachHotelGallery({
       id: `sim-${i + 1}-${hashString(`${seedKey}|${i}`).toString(16)}`,
       name,
       price,
@@ -77,7 +148,7 @@ function buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelTyp
       cancellation,
       payment,
       simulated: true
-    });
+    }, destination));
   }
   return results.sort((a, b) => a.price - b.price);
 }
@@ -97,12 +168,12 @@ router.get('/', async (req, res) => {
   if (!hotels || hotels.length === 0) {
     hotels = buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelType });
   } else {
-    hotels = hotels.map((h, i) => ({
+    hotels = hotels.map((h, i) => attachHotelGallery({
       ...h,
       id: h.id || `rt-${i + 1}`,
       category: h.category || inferCategory(h.price),
       simulated: false
-    })).sort((a, b) => (a.price || 0) - (b.price || 0));
+    }, destination)).sort((a, b) => (a.price || 0) - (b.price || 0));
   }
   res.json({ hotels, destination, checkIn, checkOut, adults, hotel_type: hotelType || null });
 });

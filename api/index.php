@@ -1,7 +1,7 @@
-<?php
+﻿<?php
 /**
  * PHP API proxy to AI Travel Planner backend.
- * Forwards requests to Node server and returns JSON. Run Node server on port 3000.
+ * Forwards requests to Node server and returns JSON. Run Node server on port 3003.
  * Usage: POST/GET to this file with same path as /api/* (e.g. api/travel/plan).
  */
 
@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
-$base = 'http://127.0.0.1:3000';
+$base = 'http://127.0.0.1:3003';
 $path = isset($_GET['path']) ? trim($_GET['path'], '/') : '';
 if ($path === '') {
   echo json_encode(['error' => 'Missing path (e.g. path=auth/login)']);
@@ -58,3 +58,4 @@ if (isset($http_response_header[0]) && preg_match('/ (\d+)/', $http_response_hea
 }
 http_response_code($code);
 echo $response;
+

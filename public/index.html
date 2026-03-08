@@ -37,7 +37,7 @@
       <section class="hero-new">
         <div class="container hero-grid">
           <div class="hero-card hero-auth">
-            <p class="eyebrow">Step 1 · Account</p>
+            <p class="eyebrow">Step 1 - Account</p>
             <h1>Log in or register</h1>
             <p class="lead">Save your trips, sync history, and pick up on any device.</p>
             <div class="cta-row">
@@ -47,7 +47,7 @@
             <p class="small-muted">Prefer to browse first? You can continue as a guest and add an account later.</p>
           </div>
           <div class="hero-card hero-where">
-            <p class="eyebrow">Step 2 · Where &amp; when</p>
+            <p class="eyebrow">Step 2 - Where &amp; when</p>
             <h2>Tell us your basics</h2>
             <form id="heroWhereForm" class="where-form">
               <label for="heroSourceInput">Leaving from</label>
@@ -72,7 +72,7 @@
         </div>
       </section>
     </section>
-    <!-- Plan Trip – Step-by-step wizard -->
+    <!-- Plan Trip - Step-by-step wizard -->
     <section id="page-plan" class="page active">
       <div class="container">
         <h2>Plan your RouteX trip</h2>
@@ -113,7 +113,7 @@
             </div>
           </div>
           <div id="planTripLength" class="trip-length-pill trip-length-pill-muted">One-way trip</div>
-          <button type="button" class="btn btn-primary" id="wizardNext1">Next →</button>
+          <button type="button" class="btn btn-primary" id="wizardNext1">Next -></button>
         </div>
 
         <!-- Step 2: Transport (Flight / Train / Bus / Car) -->
@@ -121,38 +121,47 @@
           <h3>How do you want to travel?</h3>
           <p class="wizard-hint">Choose one or more. We'll show real-time flight prices when available.</p>
           <p class="form-error hidden" id="wizardStep2Error"></p>
+          <div id="travelDocCard" class="travel-doc-card hidden" hidden>
+            <div class="travel-doc-head">
+              <span id="travelDocBadge" class="travel-doc-badge" data-state="check">Visa status</span>
+              <strong id="travelDocTitle">Travel document guidance</strong>
+            </div>
+            <p id="travelDocSummary" class="travel-doc-summary"></p>
+            <ul id="travelDocChecklist" class="travel-doc-list"></ul>
+            <p id="travelDocDisclaimer" class="travel-doc-disclaimer"></p>
+          </div>
           <div class="choice-cards" id="transportChoices">
             <label class="choice-card">
               <input type="checkbox" name="transport" value="flight" checked>
-              <span class="choice-icon">✈</span>
+              <span class="choice-icon">&#9992;</span>
               <span class="choice-label">Flight</span>
             </label>
             <label class="choice-card">
               <input type="checkbox" name="transport" value="train">
-              <span class="choice-icon">🚂</span>
+              <span class="choice-icon">&#128646;</span>
               <span class="choice-label">Train</span>
             </label>
             <label class="choice-card">
               <input type="checkbox" name="transport" value="bus">
-              <span class="choice-icon">🚌</span>
+              <span class="choice-icon">&#128652;</span>
               <span class="choice-label">Bus</span>
             </label>
             <label class="choice-card">
               <input type="checkbox" name="transport" value="car">
-              <span class="choice-icon">🚗</span>
+              <span class="choice-icon">&#128663;</span>
               <span class="choice-label">Car</span>
             </label>
           </div>
           <div class="wizard-nav">
-            <button type="button" class="btn btn-ghost" id="wizardBack2">← Back</button>
-            <button type="button" class="btn btn-primary" id="wizardNext2">Next →</button>
+            <button type="button" class="btn btn-ghost" id="wizardBack2">&lt;- Back</button>
+            <button type="button" class="btn btn-primary" id="wizardNext2">Next -></button>
           </div>
         </div>
 
         <!-- Step 3: Hotel / Stay type -->
         <div id="wizardStep3" class="wizard-panel card">
           <h3>Where do you want to stay?</h3>
-          <p class="wizard-hint">Choose a stay type, then select a specific hotel with live pricing.</p>
+          <p class="wizard-hint">Choose a stay type, then pick one hotel or split longer stays across multiple hotels with per-night allocation.</p>
           <div class="choice-cards" id="hotelChoices">
             <label class="choice-card">
               <input type="radio" name="hotel_type" value="budget">
@@ -193,13 +202,13 @@
           <div class="hotel-controls card">
             <div class="form-row two-cols">
               <div>
-                <label>Max price/night (₹)</label>
+                <label>Max price/night (INR)</label>
                 <input type="number" id="hotelMaxPrice" min="500" step="100" placeholder="e.g. 7000">
               </div>
               <div>
                 <label>Min rating</label>
                 <select id="hotelMinRating">
-                  <option value="">Any</option>
+              <option value="">-- Any --</option>
                   <option value="6">6+</option>
                   <option value="7">7+</option>
                   <option value="8">8+</option>
@@ -222,8 +231,8 @@
             <div id="wizardHotelsList" class="hotels-list"></div>
           </div>
           <div class="wizard-nav">
-            <button type="button" class="btn btn-ghost" id="wizardBack3">← Back</button>
-            <button type="button" class="btn btn-primary" id="wizardNext3">Next →</button>
+            <button type="button" class="btn btn-ghost" id="wizardBack3">&lt;- Back</button>
+            <button type="button" class="btn btn-primary" id="wizardNext3">Next -></button>
           </div>
         </div>
 
@@ -233,7 +242,7 @@
           <div class="form-row">
             <label>Trip style</label>
             <select id="planPreference" name="preference_type">
-              <option value="">— Any —</option>
+              <option value="">-- Any --</option>
               <option value="adventure">Adventure</option>
               <option value="luxury">Luxury</option>
               <option value="family">Family</option>
@@ -241,12 +250,12 @@
             </select>
           </div>
           <div class="form-row">
-            <label>Budget (₹) – optional</label>
+            <label>Budget (INR) - optional</label>
             <input type="number" id="planBudget" name="budget" min="0" step="100" placeholder="e.g. 15000">
             <p class="field-hint">Leave empty to see all price ranges.</p>
           </div>
           <div class="wizard-nav">
-            <button type="button" class="btn btn-ghost" id="wizardBack4">← Back</button>
+            <button type="button" class="btn btn-ghost" id="wizardBack4">&lt;- Back</button>
             <button type="button" class="btn btn-primary" id="wizardSubmit">Get prices & options</button>
           </div>
         </div>
@@ -256,11 +265,11 @@
           <h3>Your options</h3>
           <div id="optionsList" class="options-list"></div>
           <div id="realTimeFlightsSection" class="real-time-section hidden">
-            <h3>✈ Real-time flight options</h3>
+            <h3>Flight options</h3>
             <div id="realTimeFlightsList" class="flights-list"></div>
           </div>
           <div id="fuelCostSection" class="real-time-section hidden">
-            <h3>⛽ Fuel cost (real-time petrol price)</h3>
+            <h3>Fuel cost (real-time petrol price)</h3>
             <div id="fuelCostDetails" class="fuel-cost-card card"></div>
           </div>
           <div class="map-section">
@@ -286,7 +295,7 @@
           </div>
           <div id="itinerarySection" class="real-time-section hidden">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-              <h3>📅 Day-by-Day Itinerary</h3>
+              <h3>Day-by-Day Itinerary</h3>
               <button class="btn btn-sm btn-outline" id="btnRecalculateItinerary">Regenerate</button>
             </div>
             <div id="itineraryTimeline" class="itinerary-timeline"></div>
@@ -316,6 +325,19 @@
             <button type="submit" class="btn btn-primary">Generate Plan</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="hotelPhotoModal" class="modal hidden">
+      <div class="modal-content modal-content-wide card hotel-photo-modal-shell">
+        <div class="hotel-photo-modal-head">
+          <div>
+            <h3 id="hotelPhotoTitle">Hotel photos</h3>
+            <p id="hotelPhotoSubtitle" class="section-subtitle">Preview the stay before choosing it.</p>
+          </div>
+          <button type="button" class="btn btn-ghost" id="closeHotelPhotoModal">Close</button>
+        </div>
+        <div id="hotelPhotoGallery" class="hotel-photo-gallery"></div>
       </div>
     </div>
 
@@ -393,11 +415,11 @@
           </div>
           <div class="form-row two-cols">
             <div>
-              <label>Budget min (₹)</label>
+              <label>Budget min (INR)</label>
               <input type="number" name="budget_min" id="prefBudgetMin" min="0" step="10" placeholder="0">
             </div>
             <div>
-              <label>Budget max (₹)</label>
+              <label>Budget max (INR)</label>
               <input type="number" name="budget_max" id="prefBudgetMax" min="0" step="10" placeholder="500">
             </div>
           </div>
@@ -442,11 +464,12 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">RouteX · AI-Assisted Multimodal Travel Planner &copy; 2026</div>
+    <div class="container">RouteX - AI-Assisted Multimodal Travel Planner &copy; 2026</div>
   </footer>
   <script src="/js/app.js"></script>
 </body>
 
 </html>
+
 
 
