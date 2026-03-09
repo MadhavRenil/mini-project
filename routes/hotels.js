@@ -29,8 +29,6 @@ const CATEGORY_PROFILES = {
   apartment: { min: 2200, max: 9000, minRating: 6.5, maxRating: 9.0 }
 };
 
-const DEFAULT_IMAGE_THEME = { accent: '#2dc7ff', secondary: '#0f5fb6', label: 'Stay preview' };
-
 function inferCategory(price) {
   const p = Number(price) || 0;
   if (p <= 1800) return 'hostel';
@@ -41,72 +39,44 @@ function inferCategory(price) {
 }
 
 function cityLabel(destination) {
-  return (destination || 'City').trim().split(/\s+/).map(p => p[0] ? p[0].toUpperCase() + p.slice(1).toLowerCase() : '').join(' ');
+  return (destination || 'City').trim().split(/\s+/).map((part) => (part[0] ? part[0].toUpperCase() + part.slice(1).toLowerCase() : '')).join(' ');
 }
 
-function uniqueStrings(values) {
-  return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === 'string' && value.trim()))];
-}
-
-function svgDataUri(svg) {
+function buildHotelImagePlaceholder(hotel) {
+  const palette = hotel.simulated
+    ? { start: '#2ec8ff', end: '#0b5fb4', label: 'Preview image' }
+    : { start: '#f3a712', end: '#dd614a', label: 'Provider image' };
+  const city = hotel.city || hotel.name || 'Hotel';
+  const category = hotel.category || 'stay';
+  const label = palette.label;
+  const svg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">',
+    `  <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${palette.start}" /><stop offset="100%" stop-color="${palette.end}" /></linearGradient></defs>`,
+    '  <rect width="1280" height="720" fill="url(#g)" rx="44" />',
+    '  <circle cx="1040" cy="140" r="110" fill="rgba(255,255,255,0.16)" />',
+    '  <circle cx="1180" cy="620" r="190" fill="rgba(255,255,255,0.08)" />',
+    '  <rect x="90" y="110" width="520" height="520" rx="36" fill="rgba(255,255,255,0.14)" />',
+    '  <path d="M180 510 L290 360 L390 450 L520 280 L640 510 Z" fill="rgba(255,255,255,0.18)" />',
+    '  <circle cx="540" cy="220" r="54" fill="rgba(255,255,255,0.22)" />',
+    `  <text x="120" y="418" fill="rgba(255,255,255,0.88)" font-family="Arial, sans-serif" font-size="34">${city} | ${category}</text>`,
+    `  <text x="120" y="592" fill="#ffffff" font-family="Arial, sans-serif" font-size="52" font-weight="700">${label}</text>`,
+    '  <text x="120" y="648" fill="rgba(255,255,255,0.84)" font-family="Arial, sans-serif" font-size="28">Preview image generated when the hotel provider does not include enough photos.</text>',
+    '</svg>'
+  ].join('');
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function buildHotelPhotoPlaceholder({ destination, hotelName, category, label, theme }) {
-  const city = cityLabel(destination || 'Destination');
-  const safeHotel = String(hotelName || 'Hotel').slice(0, 34);
-  const safeCategory = String(category || 'stay').replace(/[^a-z0-9 ]/gi, '').slice(0, 20);
-  const safeLabel = String(label || 'Preview').slice(0, 22);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="${safeHotel} ${safeLabel}">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="${theme.accent}" />
-          <stop offset="100%" stop-color="${theme.secondary}" />
-        </linearGradient>
-      </defs>
-      <rect width="1200" height="900" fill="#09111f" />
-      <rect x="54" y="54" width="1092" height="792" rx="40" fill="url(#g)" opacity="0.9" />
-      <circle cx="980" cy="180" r="140" fill="rgba(255,255,255,0.16)" />
-      <circle cx="210" cy="720" r="180" fill="rgba(255,255,255,0.12)" />
-      <rect x="120" y="144" width="440" height="20" rx="10" fill="rgba(255,255,255,0.22)" />
-      <rect x="120" y="188" width="300" height="14" rx="7" fill="rgba(255,255,255,0.18)" />
-      <rect x="120" y="510" width="520" height="170" rx="26" fill="rgba(4,12,24,0.22)" />
-      <rect x="700" y="306" width="262" height="262" rx="28" fill="rgba(4,12,24,0.16)" />
-      <text x="120" y="330" fill="#ffffff" font-family="Arial, sans-serif" font-size="74" font-weight="700">${safeHotel}</text>
-      <text x="120" y="404" fill="rgba(255,255,255,0.88)" font-family="Arial, sans-serif" font-size="36">${city} | ${safeCategory}</text>
-      <text x="120" y="592" fill="#ffffff" font-family="Arial, sans-serif" font-size="54" font-weight="700">${safeLabel}</text>
-      <text x="120" y="648" fill="rgba(255,255,255,0.86)" font-family="Arial, sans-serif" font-size="28">Generated preview used when the provider does not include enough hotel photos.</text>
-    </svg>
-  `.trim();
-  return svgDataUri(svg);
-}
-
-function buildHotelImage(destination, hotelName, category, images = []) {
-  const providerImages = uniqueStrings(images);
-  if (providerImages.length) return providerImages[0];
-
-  return buildHotelPhotoPlaceholder({
-    destination,
-    hotelName,
-    category,
-    label: DEFAULT_IMAGE_THEME.label,
-    theme: DEFAULT_IMAGE_THEME
-  });
-}
-
-function attachHotelGallery(hotel, destination) {
-  const category = hotel.category || inferCategory(hotel.price);
-  const providerImages = uniqueStrings([
-    ...(Array.isArray(hotel.images) ? hotel.images : []),
-    hotel.image || ''
-  ]);
-  const image = buildHotelImage(destination, hotel.name, category, providerImages);
+function attachHotelGallery(hotel) {
+  const images = Array.isArray(hotel.images) ? hotel.images.filter(Boolean) : [];
+  if (hotel.image) images.unshift(hotel.image);
+  const uniqueImages = [...new Set(images)];
+  if (!uniqueImages.length) {
+    uniqueImages.push(buildHotelImagePlaceholder(hotel));
+  }
   return {
     ...hotel,
-    category,
-    image: image || null,
-    images: image ? [image] : []
+    image: uniqueImages[0] || null,
+    images: uniqueImages
   };
 }
 
@@ -144,11 +114,137 @@ function buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelTyp
       distance_to_airport_km: Number(distanceToAirport),
       cancellation,
       payment,
+      source: 'simulated',
+      source_label: 'Local RouteX estimate',
+      review_word: 'Generated stay estimate',
+      checkin_from: '12:00',
+      checkout_until: '11:00',
+      city,
+      summary: `${name} is a generated ${category} stay estimate in ${city}.`,
       simulated: true
-    }, destination));
+    }));
   }
   return results.sort((a, b) => a.price - b.price);
 }
+
+function buildHotelSummary(hotel, destination) {
+  if (hotel.description) return hotel.description;
+  if (hotel.summary) return hotel.summary;
+
+  const city = cityLabel(destination || hotel.city || 'your destination');
+  const category = hotel.category || inferCategory(hotel.price);
+  const sourceLabel = hotel.source_label || (hotel.simulated ? 'RouteX estimate' : 'hotel API result');
+  const ratingText = hotel.review_word
+    ? ` Guest sentiment is ${hotel.review_word.toLowerCase()}.`
+    : hotel.rating != null ? ` Current rating is ${Number(hotel.rating).toFixed(1)}/10.` : '';
+
+  return `${hotel.name || 'This stay'} is a ${category} option in ${city}. Information shown here comes from ${sourceLabel}.${ratingText}`;
+}
+
+function buildHotelFacts(hotel) {
+  const facts = [
+    hotel.source_label || null,
+    hotel.hotel_class ? `${hotel.hotel_class}-star class` : null,
+    hotel.type || null,
+    hotel.review_word && hotel.rating != null ? `${hotel.review_word} - ${Number(hotel.rating).toFixed(1)}/10` : null,
+    !hotel.review_word && hotel.rating != null ? `${Number(hotel.rating).toFixed(1)}/10 guest rating` : null,
+    hotel.review_count ? `${hotel.review_count} review${hotel.review_count === 1 ? '' : 's'}` : null,
+    hotel.price ? `${hotel.currency || 'INR'} ${Number(hotel.price).toLocaleString('en-IN')}/night` : null,
+    hotel.cancellation || null,
+    hotel.payment || null,
+    hotel.checkin_from ? `Check-in from ${hotel.checkin_from}${hotel.checkin_until ? ` until ${hotel.checkin_until}` : ''}` : null,
+    hotel.checkout_until ? `Checkout until ${hotel.checkout_until}` : null,
+    hotel.distance_to_center_km != null ? `${Number(hotel.distance_to_center_km).toFixed(1)} km to center` : null,
+    hotel.distance_to_airport_km != null ? `${Number(hotel.distance_to_airport_km).toFixed(1)} km to airport` : null,
+    hotel.city ? `Area: ${hotel.city}` : null,
+    hotel.address ? `Address: ${hotel.address}` : null,
+    hotel.location_rating ? `Location rating ${Number(hotel.location_rating).toFixed(1)}/5` : null,
+    Array.isArray(hotel.nearby_places) && hotel.nearby_places.length ? `Nearby: ${hotel.nearby_places.join(', ')}` : null
+  ];
+
+  return facts.filter(Boolean);
+}
+
+function toHotelListItem(hotel) {
+  return {
+    id: hotel.id,
+    name: hotel.name,
+    price: hotel.price,
+    rating: hotel.rating,
+    currency: hotel.currency || 'INR',
+    category: hotel.category || inferCategory(hotel.price),
+    hotel_class: hotel.hotel_class || null,
+    distance_to_center_km: hotel.distance_to_center_km ?? null,
+    distance_to_airport_km: hotel.distance_to_airport_km ?? null,
+    cancellation: hotel.cancellation || null,
+    payment: hotel.payment || null,
+    source: hotel.source || (hotel.simulated ? 'simulated' : 'api'),
+    simulated: !!hotel.simulated,
+    image: hotel.image || null,
+    images: Array.isArray(hotel.images) ? hotel.images : []
+  };
+}
+
+function toHotelDetailsItem(hotel, destination) {
+  return {
+    id: hotel.id,
+    name: hotel.name,
+    category: hotel.category || inferCategory(hotel.price),
+    price: hotel.price,
+    currency: hotel.currency || 'INR',
+    rating: hotel.rating,
+    summary: buildHotelSummary(hotel, destination),
+    facts: buildHotelFacts(hotel),
+    source: hotel.source || (hotel.simulated ? 'simulated' : 'api'),
+    simulated: !!hotel.simulated,
+    image: hotel.image || null,
+    images: Array.isArray(hotel.images) ? hotel.images : []
+  };
+}
+
+async function loadHotels({ destination, checkin, checkout, adults, hotelType }) {
+  const checkIn = checkin || new Date().toISOString().slice(0, 10);
+  const checkOut = checkout || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let hotels = await fetchHotelsRealTime(destination, checkIn, checkOut, adults);
+
+  if (!hotels || hotels.length === 0) {
+    hotels = buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelType });
+  } else {
+    hotels = hotels.map((hotel, index) => attachHotelGallery({
+      ...hotel,
+      id: hotel.id || `rt-${index + 1}`,
+      category: hotel.category || inferCategory(hotel.price),
+      simulated: false
+    })).sort((a, b) => (a.price || 0) - (b.price || 0));
+  }
+
+  return {
+    hotels,
+    checkIn,
+    checkOut
+  };
+}
+
+router.get('/details', async (req, res) => {
+  const destination = req.query.destination || req.query.city || '';
+  const checkin = req.query.checkin || req.query.check_in || '';
+  const checkout = req.query.checkout || req.query.check_out || '';
+  const adults = parseInt(req.query.adults, 10) || 1;
+  const hotelType = req.query.hotel_type || req.query.type || '';
+  const hotelId = String(req.query.id || '').trim();
+
+  if (!destination || !hotelId) {
+    return res.status(400).json({ error: 'Destination and hotel id are required' });
+  }
+
+  const { hotels } = await loadHotels({ destination, checkin, checkout, adults, hotelType });
+  const hotel = hotels.find((item) => String(item.id || '') === hotelId);
+  if (!hotel) {
+    return res.status(404).json({ error: 'Hotel not found for the current search' });
+  }
+
+  res.json({ hotel: toHotelDetailsItem(hotel, destination) });
+});
 
 router.get('/', async (req, res) => {
   const destination = req.query.destination || req.query.city || '';
@@ -159,20 +255,15 @@ router.get('/', async (req, res) => {
   if (!destination) {
     return res.json({ hotels: [], message: 'Provide destination' });
   }
-  const checkIn = checkin || new Date().toISOString().slice(0, 10);
-  const checkOut = checkout || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  let hotels = await fetchHotelsRealTime(destination, checkIn, checkOut, adults);
-  if (!hotels || hotels.length === 0) {
-    hotels = buildSimulatedHotels({ destination, checkIn, checkOut, adults, hotelType });
-  } else {
-    hotels = hotels.map((h, i) => attachHotelGallery({
-      ...h,
-      id: h.id || `rt-${i + 1}`,
-      category: h.category || inferCategory(h.price),
-      simulated: false
-    }, destination)).sort((a, b) => (a.price || 0) - (b.price || 0));
-  }
-  res.json({ hotels, destination, checkIn, checkOut, adults, hotel_type: hotelType || null });
+  const { hotels, checkIn, checkOut } = await loadHotels({ destination, checkin, checkout, adults, hotelType });
+  res.json({
+    hotels: hotels.map(toHotelListItem),
+    destination,
+    checkIn,
+    checkOut,
+    adults,
+    hotel_type: hotelType || null
+  });
 });
 
 module.exports = router;
