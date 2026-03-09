@@ -5,6 +5,31 @@ const { requireAuth } = require('../lib/auth');
 
 const router = express.Router();
 
+function setRegisteredSession(req, user) {
+  req.session.isGuest = false;
+  req.session.userId = user.id;
+  req.session.userEmail = user.email;
+  req.session.userName = user.name || user.email;
+  req.session.userRole = user.role || 'user';
+}
+
+function setGuestSession(req) {
+  req.session.isGuest = true;
+  req.session.userId = null;
+  req.session.userEmail = null;
+  req.session.userName = 'Guest';
+  req.session.userRole = 'guest';
+}
+
+function clearSession(req) {
+  if (!req.session) return;
+  req.session.isGuest = false;
+  req.session.userId = null;
+  req.session.userEmail = null;
+  req.session.userName = null;
+  req.session.userRole = null;
+}
+
 router.post('/register', (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password) {
@@ -17,9 +42,12 @@ router.post('/register', (req, res) => {
       'INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)'
     );
     const result = stmt.run(email.toLowerCase().trim(), hash, name || null);
-    req.session.userId = result.lastInsertRowid;
-    req.session.userEmail = email;
-    req.session.userName = name || email;
+    setRegisteredSession(req, {
+      id: result.lastInsertRowid,
+      email,
+      name: name || email,
+      role: 'user'
+    });
     res.status(201).json({
       success: true,
       user: { id: result.lastInsertRowid, email, name: name || email }
@@ -44,21 +72,34 @@ router.post('/login', (req, res) => {
   if (!row || !bcrypt.compareSync(password, row.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  req.session.userId = row.id;
-  req.session.userEmail = row.email;
-  req.session.userName = row.name || row.email;
+  setRegisteredSession(req, {
+    id: row.id,
+    email: row.email,
+    name: row.name || row.email,
+    role: 'user'
+  });
   res.json({
     success: true,
     user: { id: row.id, email: row.email, name: row.name || row.email }
   });
 });
 
+router.post('/guest', (req, res) => {
+  setGuestSession(req);
+  res.json({
+    success: true,
+    user: {
+      id: null,
+      email: null,
+      name: 'Guest',
+      role: 'guest',
+      isGuest: true
+    }
+  });
+});
+
 router.post('/logout', (req, res) => {
-  if (req.session) {
-    req.session.userId = null;
-    req.session.userEmail = null;
-    req.session.userName = null;
-  }
+  clearSession(req);
   req.session.destroy(() => {
     res.clearCookie('connect.sid');
     res.json({ success: true });
@@ -66,6 +107,17 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', (req, res) => {
+  if (req.session && req.session.isGuest) {
+    return res.json({
+      user: {
+        id: null,
+        email: null,
+        name: req.session.userName || 'Guest',
+        role: 'guest',
+        isGuest: true
+      }
+    });
+  }
   if (!req.session || !req.session.userId) {
     return res.json({ user: null });
   }
@@ -75,7 +127,7 @@ router.get('/me', (req, res) => {
   ).get(req.session.userId);
   if (!row) return res.json({ user: null });
   res.json({
-    user: { id: row.id, email: row.email, name: row.name || row.email, role: row.role }
+    user: { id: row.id, email: row.email, name: row.name || row.email, role: row.role, isGuest: false }
   });
 });
 

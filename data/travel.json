@@ -1,11 +1,59 @@
 {
-  "users": [],
-  "travel_history": [],
+  "users": [
+    {
+      "id": 1,
+      "email": "madhav@56",
+      "password_hash": "$2a$10$90deiaMDsQd8r77xpOkf2.WZd4dHC0uu.hlib.TVDgN2C0kWokCRG",
+      "name": null,
+      "role": "user",
+      "created_at": "2026-03-07T16:48:35.302Z"
+    },
+    {
+      "id": 2,
+      "email": "madhav@gmail.com",
+      "password_hash": "$2a$10$MaBCr1oXiJms0TJfQxk75OFom/tam3fLvpVhAjLf4OXkvG4bVtNNq",
+      "name": null,
+      "role": "user",
+      "created_at": "2026-03-07T16:50:59.322Z"
+    }
+  ],
+  "travel_history": [
+    {
+      "id": 1,
+      "user_id": 2,
+      "source": "Kochi, Kerala, India",
+      "destination": "Munich, Germany",
+      "start_date": "2026-03-18",
+      "end_date": "2026-03-23",
+      "modes": "[\"flight\"]",
+      "distance_km": 3225,
+      "duration_minutes": 1150,
+      "estimated_cost": 72392,
+      "itinerary_json": "[{\"day\":1,\"activities\":[{\"time\":\"10:00 AM\",\"title\":\"Arrival in Munich, Check-in to accommodation\",\"type\":\"culture\"},{\"time\":\"11:30 AM\",\"title\":\"Explore Marienplatz & Neues Rathaus (Glockenspiel at 12 PM)\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Lunch at Ratskeller München (traditional Bavarian fare)\",\"type\":\"food\"},{\"time\":\"2:30 PM\",\"title\":\"Visit Frauenkirche (Church of Our Lady)\",\"type\":\"culture\"},{\"time\":\"3:30 PM\",\"title\":\"Wander through Viktualienmarkt (food market)\",\"type\":\"food\"},{\"time\":\"6:30 PM\",\"title\":\"Dinner at Augustiner am Dom\",\"type\":\"food\"},{\"time\":\"11 PM\",\"title\":\"Megaloh\",\"type\":\"event\",\"venue\":\"Hansa39\"}]},{\"day\":2,\"activities\":[{\"time\":\"9:30 AM\",\"title\":\"Tour the Munich Residenz (Former Royal Palace)\",\"type\":\"culture\"},{\"time\":\"12:30 PM\",\"title\":\"Stroll through Hofgarten (Royal Garden)\",\"type\":\"culture\"},{\"time\":\"1:30 PM\",\"title\":\"Lunch near Odeonsplatz\",\"type\":\"food\"},{\"time\":\"3:00 PM\",\"title\":\"Relax and explore the English Garden (Englischer Garten) - visit the Chinese Tower and Eisbach Wave\",\"type\":\"culture\"},{\"time\":\"7:00 PM\",\"title\":\"Dinner in Schwabing or Glockenbachviertel\",\"type\":\"food\"},{\"time\":\"11:30 PM\",\"title\":\"Hällas - Panorama Tour\",\"type\":\"event\",\"venue\":\"Hansa39\"}]},{\"day\":3,\"activities\":[{\"time\":\"10:00 AM\",\"title\":\"Discover the Deutsches Museum (Science and Technology Museum)\",\"type\":\"culture\"},{\"time\":\"1:30 PM\",\"title\":\"Lunch at the museum cafe or nearby Isar riverbank\",\"type\":\"food\"},{\"time\":\"3:00 PM\",\"title\":\"Visit the Pinakothek der Moderne (Modern Art, Architecture, Design)\",\"type\":\"culture\"},{\"time\":\"6:00 PM\",\"title\":\"Early dinner near Hansa39 or in the city center\",\"type\":\"food\"},{\"time\":\"8:00 PM\",\"title\":\"Attend Megaloh at Hansa39\",\"type\":\"culture\"}]},{\"day\":4,\"activities\":[{\"time\":\"10:00 AM\",\"title\":\"Explore Nymphenburg Palace and its vast gardens\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Lunch at Schlosscafé im Palmenhaus or a restaurant in the Nymphenburg area\",\"type\":\"food\"},{\"time\":\"3:00 PM\",\"title\":\"Relaxed afternoon, souvenir shopping around Kaufingerstrasse\",\"type\":\"culture\"},{\"time\":\"7:00 PM\",\"title\":\"Dinner at a traditional 'Wirtshaus' like Hofbräuhaus\",\"type\":\"food\"}]},{\"day\":5,\"activities\":[{\"time\":\"9:30 AM\",\"title\":\"Visit BMW Welt and BMW Museum (History, design, technology)\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Lunch at a restaurant near the Olympic Park or in the museum complex\",\"type\":\"food\"},{\"time\":\"2:30 PM\",\"title\":\"Explore the Olympic Park (Olympiapark) - ascend the Olympiaturm for panoramic views\",\"type\":\"culture\"},{\"time\":\"6:30 PM\",\"title\":\"Farewell Dinner at a high-quality restaurant offering modern Bavarian cuisine\",\"type\":\"food\"}]},{\"day\":6,\"activities\":[{\"time\":\"9:30 AM\",\"title\":\"Enjoy a traditional Bavarian Weißwurst Frühschoppen (breakfast)\",\"type\":\"food\"},{\"time\":\"11:00 AM\",\"title\":\"Last-minute souvenir shopping or revisit a favorite spot\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Check-out from accommodation and head to Munich Airport (MUC) for departure\",\"type\":\"culture\"}]}]",
+      "created_at": "2026-03-07T16:53:27.405Z"
+    }
+  ],
   "user_preferences": [],
   "_seq": {
-    "users": 0,
-    "travel_history": 0,
-    "bookings": 0
+    "users": 2,
+    "travel_history": 1,
+    "bookings": 1
   },
-  "bookings": []
+  "bookings": [
+    {
+      "id": 1,
+      "user_id": 2,
+      "source": "Kochi, Kerala, India",
+      "destination": "Munich, Germany",
+      "travel_date": "2026-03-18",
+      "budget": null,
+      "preference_type": "family",
+      "num_travelers": 1,
+      "selected_option_json": "{\"id\":\"flight-api-2\",\"legs\":[{\"mode\":\"flight\",\"modeName\":\"IndiGo\",\"estimated_cost\":72392,\"duration_minutes\":1150,\"distance_km\":3225}],\"total_cost\":109337,\"total_duration_minutes\":1150,\"total_distance_km\":3225,\"modes\":[\"flight\"],\"from_api\":true,\"provider\":\"serpapi\",\"carrier\":\"IndiGo\",\"outbound\":\"2026-03-18 16:15\",\"arrival\":\"2026-03-19 06:55\",\"trip_type\":\"roundtrip\",\"return_date\":\"2026-03-23\",\"stop_count\":1,\"route_label\":\"Round trip\",\"booking_token\":null,\"departure_token\":\"WyJDalJJZEU1TGNUVXRTbXBxTW1kQlJFRTJRV2RDUnkwdExTMHRMUzB0TFhaMGNXWXhPVUZCUVVGQlIyMXpWamRGUlMxSVJXVkJFZ3MyUlRFek1qTjhVVkkxT1JvTENNaTFCQkFBR2dOSlRsSTRISENZNXdRPSIsW1siQ09LIiwiMjAyNi0wMy0xOCIsIkRPSCIsbnVsbCwiNkUiLCIxMzIzIl0sWyJET0giLCIyMDI2LTAzLTE5IiwiTVVDIixudWxsLCJRUiIsIjU5Il1dXQ==\",\"airline_logo\":\"https://www.gstatic.com/flights/airline_logos/70px/multi.png\",\"quote_id\":\"serpapi-flight-5\",\"direct\":false,\"price_total\":72392,\"score\":110,\"num_travelers\":1,\"hotel\":{\"id\":\"ChgInujXld-oyobwARoLL2cvMXRkY2ZienAQAQ\",\"type\":\"apartment\",\"name\":\"Holiday Inn Munich - South by IHG\",\"price_per_night\":7389,\"total_nights\":5,\"total_cost\":36945,\"rating\":7.8,\"simulated\":false,\"source\":\"serpapi\",\"distance_to_center_km\":null,\"distance_to_airport_km\":null,\"cancellation\":null,\"payment\":null},\"total_with_hotel\":109337,\"selected_events\":[{\"id\":\"serpapi-event-1-4d6567616c6f\",\"name\":\"Megaloh\",\"date\":\"Mar 7\",\"when\":\"Sat, 7 Mar, 8–11 pm\",\"type\":\"Local event\",\"venue\":\"Hansa39\",\"address\":\"Hansa39, Hansastraße 39-41, Munich, Germany\",\"description\":\"Find tickets for Megaloh at Feierwerk / Hansa 39 in MÜNCHEN on 3/7/2026 at 8:00 PM\",\"link\":\"https://open.spotify.com/concert/2JRWS8hykECyGMAbN9Jfe7\",\"ticket_source\":\"Spotify.com\",\"ticket_type\":\"tickets\",\"image\":\"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQUClueE6lGK9-6nT0ET2KlJkCDDmfpLU1KHQtgjYoejNY48yBf7EbqPTEJOg&s=10\",\"time_label\":\"11 PM\",\"source\":\"serpapi\"},{\"id\":\"serpapi-event-10-48c3a46c6c61\",\"name\":\"Hällas - Panorama Tour\",\"date\":\"Mar 18\",\"when\":\"Wed, 18 Mar, 8:30 – 11:30 pm\",\"type\":\"Local event\",\"venue\":\"Hansa39\",\"address\":\"Hansa39, Hansastraße 39-41, Munich, Germany\",\"description\":\"Find tickets for Hällas at Feierwerk / Hansa 39 in MÜNCHEN on 3/18/2026 at 8:30 PM\",\"link\":\"https://open.spotify.com/concert/7DHgOKKr1dLvbo8hZXY6Az\",\"ticket_source\":\"Spotify.com\",\"ticket_type\":\"tickets\",\"image\":\"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7L1ErInlWteI1EKKZ0xpSzSjAFUcx1TvCsVIdR7q_F_Ifij4hpv9KT7Zx5w&s=10\",\"time_label\":\"11:30 PM\",\"source\":\"serpapi\"}],\"final_itinerary\":[{\"day\":1,\"activities\":[{\"time\":\"10:00 AM\",\"title\":\"Arrival in Munich, Check-in to accommodation\",\"type\":\"culture\"},{\"time\":\"11:30 AM\",\"title\":\"Explore Marienplatz & Neues Rathaus (Glockenspiel at 12 PM)\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Lunch at Ratskeller München (traditional Bavarian fare)\",\"type\":\"food\"},{\"time\":\"2:30 PM\",\"title\":\"Visit Frauenkirche (Church of Our Lady)\",\"type\":\"culture\"},{\"time\":\"3:30 PM\",\"title\":\"Wander through Viktualienmarkt (food market)\",\"type\":\"food\"},{\"time\":\"6:30 PM\",\"title\":\"Dinner at Augustiner am Dom\",\"type\":\"food\"},{\"time\":\"11 PM\",\"title\":\"Megaloh\",\"type\":\"event\",\"venue\":\"Hansa39\"}]},{\"day\":2,\"activities\":[{\"time\":\"9:30 AM\",\"title\":\"Tour the Munich Residenz (Former Royal Palace)\",\"type\":\"culture\"},{\"time\":\"12:30 PM\",\"title\":\"Stroll through Hofgarten (Royal Garden)\",\"type\":\"culture\"},{\"time\":\"1:30 PM\",\"title\":\"Lunch near Odeonsplatz\",\"type\":\"food\"},{\"time\":\"3:00 PM\",\"title\":\"Relax and explore the English Garden (Englischer Garten) - visit the Chinese Tower and Eisbach Wave\",\"type\":\"culture\"},{\"time\":\"7:00 PM\",\"title\":\"Dinner in Schwabing or Glockenbachviertel\",\"type\":\"food\"},{\"time\":\"11:30 PM\",\"title\":\"Hällas - Panorama Tour\",\"type\":\"event\",\"venue\":\"Hansa39\"}]},{\"day\":3,\"activities\":[{\"time\":\"10:00 AM\",\"title\":\"Discover the Deutsches Museum (Science and Technology Museum)\",\"type\":\"culture\"},{\"time\":\"1:30 PM\",\"title\":\"Lunch at the museum cafe or nearby Isar riverbank\",\"type\":\"food\"},{\"time\":\"3:00 PM\",\"title\":\"Visit the Pinakothek der Moderne (Modern Art, Architecture, Design)\",\"type\":\"culture\"},{\"time\":\"6:00 PM\",\"title\":\"Early dinner near Hansa39 or in the city center\",\"type\":\"food\"},{\"time\":\"8:00 PM\",\"title\":\"Attend Megaloh at Hansa39\",\"type\":\"culture\"}]},{\"day\":4,\"activities\":[{\"time\":\"10:00 AM\",\"title\":\"Explore Nymphenburg Palace and its vast gardens\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Lunch at Schlosscafé im Palmenhaus or a restaurant in the Nymphenburg area\",\"type\":\"food\"},{\"time\":\"3:00 PM\",\"title\":\"Relaxed afternoon, souvenir shopping around Kaufingerstrasse\",\"type\":\"culture\"},{\"time\":\"7:00 PM\",\"title\":\"Dinner at a traditional 'Wirtshaus' like Hofbräuhaus\",\"type\":\"food\"}]},{\"day\":5,\"activities\":[{\"time\":\"9:30 AM\",\"title\":\"Visit BMW Welt and BMW Museum (History, design, technology)\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Lunch at a restaurant near the Olympic Park or in the museum complex\",\"type\":\"food\"},{\"time\":\"2:30 PM\",\"title\":\"Explore the Olympic Park (Olympiapark) - ascend the Olympiaturm for panoramic views\",\"type\":\"culture\"},{\"time\":\"6:30 PM\",\"title\":\"Farewell Dinner at a high-quality restaurant offering modern Bavarian cuisine\",\"type\":\"food\"}]},{\"day\":6,\"activities\":[{\"time\":\"9:30 AM\",\"title\":\"Enjoy a traditional Bavarian Weißwurst Frühschoppen (breakfast)\",\"type\":\"food\"},{\"time\":\"11:00 AM\",\"title\":\"Last-minute souvenir shopping or revisit a favorite spot\",\"type\":\"culture\"},{\"time\":\"1:00 PM\",\"title\":\"Check-out from accommodation and head to Munich Airport (MUC) for departure\",\"type\":\"culture\"}]}]}",
+      "total_cost": 72392,
+      "payment_ref": "DEMO-1772902407397-03lill",
+      "status": "confirmed",
+      "created_at": "2026-03-07T16:53:27.404Z"
+    }
+  ]
 }

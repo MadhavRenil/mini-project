@@ -17,7 +17,13 @@
   let selectedDestinationEvents = [];
   let destinationEventsKey = '';
   let pendingReviewCard = null;
+  let currentUser = null;
   const autocompleteCache = new Map();
+  const ACCOUNT_REQUIRED_PAGES = new Set(['history', 'preferences']);
+
+  function isGuestUser(user = currentUser) {
+    return Boolean(user && (user.isGuest || user.role === 'guest'));
+  }
 
   function scrollViewportTo(target, behavior = 'smooth') {
     const top = target
@@ -27,6 +33,10 @@
   }
 
   function showPage(pageId) {
+    if (ACCOUNT_REQUIRED_PAGES.has(pageId) && isGuestUser()) {
+      notify('Create an account to use saved trips and preferences.', 'info');
+      return;
+    }
     document.querySelectorAll('.page').forEach((p) => {
       const isActive = p.id === 'page-' + pageId;
       p.classList.toggle('active', isActive);
@@ -49,14 +59,30 @@
     const navLogin = document.getElementById('navLogin');
     const btnLogout = document.getElementById('btnLogout');
     const userBadge = document.getElementById('userBadge');
+    const historyLink = document.querySelector('[data-page="history"]');
+    const preferencesLink = document.querySelector('[data-page="preferences"]');
+    currentUser = user || null;
     if (user) {
-      if (navLogin) navLogin.style.display = 'none';
+      const guestMode = isGuestUser(user);
+      if (navLogin) {
+        navLogin.style.display = guestMode ? 'inline-block' : 'none';
+        navLogin.textContent = guestMode ? 'Create account' : 'Log in';
+        navLogin.href = guestMode ? '/register' : '/login';
+      }
       if (btnLogout) { btnLogout.hidden = false; btnLogout.style.display = 'inline-block'; }
-      if (userBadge) userBadge.textContent = user.email;
+      if (userBadge) userBadge.textContent = guestMode ? 'Guest mode' : (user.name || user.email || 'Account');
+      if (historyLink) historyLink.style.display = guestMode ? 'none' : 'inline-block';
+      if (preferencesLink) preferencesLink.style.display = guestMode ? 'none' : 'inline-block';
     } else {
-      if (navLogin) navLogin.style.display = 'inline-block';
+      if (navLogin) {
+        navLogin.style.display = 'inline-block';
+        navLogin.textContent = 'Log in';
+        navLogin.href = '/login';
+      }
       if (btnLogout) btnLogout.hidden = true;
       if (userBadge) userBadge.textContent = '';
+      if (historyLink) historyLink.style.display = 'inline-block';
+      if (preferencesLink) preferencesLink.style.display = 'inline-block';
     }
   }
 

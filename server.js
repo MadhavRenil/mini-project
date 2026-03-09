@@ -13,6 +13,7 @@ const hotelsRoutes = require('./routes/hotels');
 const fuelRoutes = require('./routes/fuel');
 const mapsRoutes = require('./routes/maps');
 const { initDb } = require('./lib/db');
+const { hasAppSession } = require('./lib/auth');
 
 initDb();
 
@@ -57,7 +58,7 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/app', (req, res) => {
-  if (!req.session || !req.session.userId) {
+  if (!hasAppSession(req)) {
     return res.redirect('/login');
   }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

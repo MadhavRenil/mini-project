@@ -17,6 +17,26 @@
     });
   }
 
+  async function startGuestSession(button, errorNode) {
+    const idleText = button ? button.textContent : '';
+    if (errorNode) errorNode.textContent = '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Entering guest mode...';
+    }
+    try {
+      await fetchJSON(API + '/auth/guest', { method: 'POST' });
+      window.location.href = '/app';
+    } catch (error) {
+      if (errorNode) errorNode.textContent = error.message || 'Guest login failed';
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = idleText;
+      }
+    }
+  }
+
   const loginForm = document.getElementById('formLogin');
   clearForm(loginForm);
   if (params.get('logout') === '1') {
@@ -50,6 +70,13 @@
     });
   }
 
+  document.getElementById('btnGuestLogin')?.addEventListener('click', () => {
+    startGuestSession(
+      document.getElementById('btnGuestLogin'),
+      document.getElementById('loginError')
+    );
+  });
+
   const registerForm = document.getElementById('formRegister');
   clearForm(registerForm);
   if (registerForm) {
@@ -79,5 +106,12 @@
       }
     });
   }
+
+  document.getElementById('btnGuestRegister')?.addEventListener('click', () => {
+    startGuestSession(
+      document.getElementById('btnGuestRegister'),
+      document.getElementById('registerError')
+    );
+  });
 })();
 
