@@ -11,6 +11,37 @@ const { generateItinerary } = require('../lib/itinerary');
 
 const router = express.Router();
 
+function parseDateOnly(value) {
+  if (!value) return null;
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getTodayUtcStart() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function getTravelDateValidationError(departureDate, returnDate = null) {
+  const departure = parseDateOnly(departureDate);
+  if (!departure) return 'Valid departure date required';
+  if (departure.getTime() < getTodayUtcStart().getTime()) {
+    return 'Departure date cannot be in the past';
+  }
+
+  if (!returnDate) return '';
+
+  const returnParsed = parseDateOnly(returnDate);
+  if (!returnParsed) return 'Valid return date required';
+  if (returnParsed.getTime() < departure.getTime()) {
+    return 'Return date must be on or after the departure date';
+  }
+
+  return '';
+}
+
 // Step-by-step: transport choice, hotel type -> Fetch APIs (SerpApi) -> AI -> Route optimization -> Itinerary + hotel cost
 router.post('/plan', optionalAuth(), async (req, res) => {
   const {
@@ -39,12 +70,17 @@ router.post('/plan', optionalAuth(), async (req, res) => {
   if (budget != null) prefs.budget_max = budget;
   const numT = Math.max(1, parseInt(num_travelers, 10) || 1);
   const travelDate = travel_date || start_date || null;
+  const resolvedReturnDate = return_date || end_date || null;
+  const dateError = getTravelDateValidationError(travelDate, resolvedReturnDate);
+  if (dateError) {
+    return res.status(400).json({ error: dateError });
+  }
 
   let apiFlights = null;
   let flightDataSource = null;
   try {
     const transport = await getTransportOptions(source, destination, travelDate, numT, transport_choice, {
-      returnDate: return_date || end_date || null,
+      returnDate: resolvedReturnDate,
       departureId: source_id || null,
       arrivalId: destination_id || null
     });
@@ -74,8 +110,8 @@ router.post('/plan', optionalAuth(), async (req, res) => {
     source,
     destination,
     travel_date: travelDate,
-    return_date: return_date || end_date || null,
-    end_date: end_date || return_date || null,
+    return_date: resolvedReturnDate,
+    end_date: resolvedReturnDate,
     budget: budget != null ? Number(budget) : null,
     preference_type: preference_type || null,
     num_travelers: numT,
@@ -202,6 +238,10 @@ router.post('/confirm-booking', optionalAuth(), (req, res) => {
   } = req.body;
   if (!source || !destination || !selected_option) {
     return res.status(400).json({ error: 'Source, destination, and selected option required' });
+  }
+  const dateError = getTravelDateValidationError(travel_date, return_date || null);
+  if (dateError) {
+    return res.status(400).json({ error: dateError });
   }
   const userId = req.session && req.session.userId;
   const db = getDb();

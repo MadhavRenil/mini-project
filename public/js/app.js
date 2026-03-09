@@ -256,11 +256,24 @@
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
+  function getTodayDateValue() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   function getTripMetrics(departureDate, returnDate) {
     if (!departureDate && !returnDate) return { state: 'empty', days: null, nights: null, label: 'Choose travel dates', invalid: false };
     if (!departureDate) return { state: 'invalid', days: null, nights: null, label: 'Add a departure date first', invalid: true };
-    if (!returnDate) return { state: 'oneway', days: null, nights: null, label: 'One-way trip', invalid: false };
+    const today = parseDateOnly(getTodayDateValue());
     const start = parseDateOnly(departureDate);
+    if (!start) return { state: 'invalid', days: null, nights: null, label: 'Check your travel dates', invalid: true };
+    if (today && start.getTime() < today.getTime()) {
+      return { state: 'invalid', days: null, nights: null, label: 'Departure date cannot be in the past', invalid: true };
+    }
+    if (!returnDate) return { state: 'oneway', days: null, nights: null, label: 'One-way trip', invalid: false };
     const end = parseDateOnly(returnDate);
     if (!start || !end) return { state: 'invalid', days: null, nights: null, label: 'Check your travel dates', invalid: true };
     const diff = Math.round((end.getTime() - start.getTime()) / 86400000);
@@ -287,6 +300,7 @@
   function getTripValidationMessage(departureDate, returnDate) {
     if (!departureDate) return 'Please choose a departure date.';
     const metrics = getTripMetrics(departureDate, returnDate);
+    if (metrics.label === 'Departure date cannot be in the past') return metrics.label;
     if (metrics.invalid) return 'Return date must be on or after the departure date.';
     return '';
   }
@@ -637,7 +651,12 @@
   function syncTripLengthDisplay(departureInput, returnInput, pill, nightsInput = null) {
     const departureDate = departureInput?.value || '';
     const returnDate = returnInput?.value || '';
-    if (returnInput) returnInput.min = departureDate || '';
+    const todayDateValue = getTodayDateValue();
+    if (departureInput) departureInput.min = todayDateValue;
+    if (returnInput) {
+      const returnMin = departureDate && departureDate > todayDateValue ? departureDate : todayDateValue;
+      returnInput.min = returnMin;
+    }
     const metrics = getTripMetrics(departureDate, returnDate);
     if (pill) {
       pill.textContent = metrics.label;
@@ -709,16 +728,9 @@
       ...(Array.isArray(hotel?.images) ? hotel.images : []),
       hotel?.image || ''
     ]);
-    if (providerImages.length >= 3) return providerImages.slice(0, 8);
-    const fallbackThemes = [
-      { start: '#2ec8ff', end: '#0b5fb4', label: 'Lobby' },
-      { start: '#ffc55b', end: '#ef7f41', label: 'Room' },
-      { start: '#74e6ba', end: '#10997b', label: 'View' },
-      { start: '#ff9b7c', end: '#d65050', label: 'Dining' },
-      { start: '#8e9bff', end: '#4e5ed8', label: 'Pool' }
-    ];
-    const placeholders = fallbackThemes.map((theme) => buildHotelPhotoPlaceholder(hotel, theme.label, theme));
-    return uniqueStrings([...providerImages, ...placeholders]).slice(0, 8);
+    if (providerImages.length) return [providerImages[0]];
+    const fallbackTheme = { start: '#2ec8ff', end: '#0b5fb4', label: 'Stay' };
+    return [buildHotelPhotoPlaceholder(hotel, fallbackTheme.label, fallbackTheme)];
   }
 
   function isSameHotelSelection(left, right) {
@@ -1049,17 +1061,14 @@
         const assignedNights = selectedEntry ? Math.max(0, parseInt(selectedEntry.assigned_nights ?? selectedEntry.total_nights ?? 0, 10) || 0) : 0;
         const distanceCenter = hotel.distance_to_center_km != null ? `${safeNum(hotel.distance_to_center_km, 0).toFixed(1)} km to center` : 'Center distance n/a';
         const distanceAirport = hotel.distance_to_airport_km != null ? `${safeNum(hotel.distance_to_airport_km, 0).toFixed(1)} km to airport` : 'Airport distance n/a';
-        const gallerySources = getHotelGallerySources(hotel);
-        const galleryCount = gallerySources.length;
-        const galleryPreview = gallerySources.slice(0, 4);
-        const galleryOverflow = Math.max(0, galleryCount - galleryPreview.length);
+        const previewImage = getHotelGallerySources(hotel)[0] || '';
         return `
           <div class="hotel-card card ${assignedNights ? 'selected' : ''}" data-hotel-id="${id}">
             <div class="hotel-head">
               <div class="hotel-title-stack">
                 <div class="hotel-title-row">
                   <strong>${escapeHtml(hotel.name || 'Hotel')}</strong>
-                  <button type="button" class="btn btn-ghost btn-view-hotel-photos" data-hotel-id="${id}">Photos (${galleryCount})</button>
+                  <button type="button" class="btn btn-ghost btn-view-hotel-photos" data-hotel-id="${id}">Preview</button>
                 </div>
                 <div class="hotel-meta">
                   <span>${escapeHtml(rating)}</span>
@@ -1075,23 +1084,9 @@
               <span class="hotel-tag">${escapeHtml(hotel.cancellation || 'Cancellation info unavailable')}</span>
               <span class="hotel-tag">${escapeHtml(hotel.payment || 'Payment info unavailable')}</span>
             </div>
-            <div class="hotel-preview-strip">
-              ${galleryPreview.map((src, photoIndex) => `
-                <button
-                  type="button"
-                  class="hotel-preview-thumb btn-view-hotel-photos"
-                  data-hotel-id="${id}"
-                  aria-label="Open photo ${photoIndex + 1} for ${escapeHtml(hotel.name || 'Hotel')}"
-                >
-                  <img src="${src}" alt="${escapeHtml((hotel.name || 'Hotel') + ' preview ' + (photoIndex + 1))}" loading="lazy">
-                </button>
-              `).join('')}
-              ${galleryOverflow ? `
-                <button type="button" class="hotel-preview-thumb hotel-preview-more btn-view-hotel-photos" data-hotel-id="${id}">
-                  +${galleryOverflow} more
-                </button>
-              ` : ''}
-            </div>
+            <button type="button" class="hotel-cover btn-view-hotel-photos" data-hotel-id="${id}" aria-label="Preview ${escapeHtml(hotel.name || 'Hotel')}">
+              <img src="${previewImage}" alt="${escapeHtml((hotel.name || 'Hotel') + ' preview')}" loading="lazy">
+            </button>
             ${nights > 1 ? `
               <div class="hotel-allocation-row">
                 <label class="hotel-night-label" for="hotel-night-${id}">Nights in this hotel</label>
@@ -1204,12 +1199,12 @@
 
     const photos = getHotelGallerySources(hotel);
     const rating = hotel.rating != null ? `${safeNum(hotel.rating, 0).toFixed(1)}/10` : 'No rating';
-    title.textContent = hotel.name || 'Hotel photos';
-    subtitle.textContent = `${rating} | ${hotel.category || 'stay'} | ${hotel.simulated ? 'Preview gallery' : 'Provider gallery'}`;
+    title.textContent = hotel.name || 'Hotel preview';
+    subtitle.textContent = `${rating} | ${hotel.category || 'stay'} | ${hotel.simulated ? 'Preview image' : 'Provider image'}`;
     gallery.innerHTML = photos.map((src, index) => `
       <figure class="hotel-photo-frame">
         <img src="${src}" alt="${escapeHtml((hotel.name || 'Hotel') + ' photo ' + (index + 1))}" loading="lazy">
-        <figcaption>${escapeHtml(hotel.name || 'Hotel')} | Photo ${index + 1}</figcaption>
+        <figcaption>${escapeHtml(hotel.name || 'Hotel')} | Preview</figcaption>
       </figure>
     `).join('');
     modal.classList.remove('hidden');
@@ -2564,6 +2559,12 @@
     const planSource = document.getElementById('planSource');
     const planDate = document.getElementById('planTravelDate');
     const planReturnDate = document.getElementById('planReturnDate');
+    const tripError = getTripValidationMessage(heroDateInput?.value || '', heroReturnDateInput?.value || '');
+
+    if (tripError) {
+      notify(tripError, 'error');
+      return;
+    }
 
     showPage('plan');
     if (heroSearchInput && planDestination) copyInputLocationState(heroSearchInput, planDestination);
@@ -2581,6 +2582,13 @@
   [document.getElementById('planTravelDate'), document.getElementById('planReturnDate')].forEach((inputEl) => {
     inputEl?.addEventListener('input', syncPlannerTripInputs);
   });
+  const todayDateValue = getTodayDateValue();
+  if (heroDateInput) heroDateInput.min = todayDateValue;
+  if (heroReturnDateInput) heroReturnDateInput.min = todayDateValue;
+  const plannerTravelDateInput = document.getElementById('planTravelDate');
+  const plannerReturnDateInput = document.getElementById('planReturnDate');
+  if (plannerTravelDateInput) plannerTravelDateInput.min = todayDateValue;
+  if (plannerReturnDateInput) plannerReturnDateInput.min = todayDateValue;
   syncHeroTripInputs();
   syncPlannerTripInputs();
 

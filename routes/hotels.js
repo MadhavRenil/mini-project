@@ -29,13 +29,7 @@ const CATEGORY_PROFILES = {
   apartment: { min: 2200, max: 9000, minRating: 6.5, maxRating: 9.0 }
 };
 
-const GALLERY_THEMES = [
-  { accent: '#2dc7ff', secondary: '#0f5fb6', label: 'Lobby preview' },
-  { accent: '#ffc35c', secondary: '#f27d42', label: 'Room preview' },
-  { accent: '#71e6b5', secondary: '#159f7f', label: 'View preview' },
-  { accent: '#ff9a7a', secondary: '#d65252', label: 'Dining preview' },
-  { accent: '#8c9eff', secondary: '#4c5fd7', label: 'Pool preview' }
-];
+const DEFAULT_IMAGE_THEME = { accent: '#2dc7ff', secondary: '#0f5fb6', label: 'Stay preview' };
 
 function inferCategory(price) {
   const p = Number(price) || 0;
@@ -88,16 +82,17 @@ function buildHotelPhotoPlaceholder({ destination, hotelName, category, label, t
   return svgDataUri(svg);
 }
 
-function buildHotelGallery(destination, hotelName, category, images = []) {
+function buildHotelImage(destination, hotelName, category, images = []) {
   const providerImages = uniqueStrings(images);
-  const fallbackImages = GALLERY_THEMES.map((theme) => buildHotelPhotoPlaceholder({
+  if (providerImages.length) return providerImages[0];
+
+  return buildHotelPhotoPlaceholder({
     destination,
     hotelName,
     category,
-    label: theme.label,
-    theme
-  }));
-  return uniqueStrings([...providerImages, ...fallbackImages]).slice(0, 8);
+    label: DEFAULT_IMAGE_THEME.label,
+    theme: DEFAULT_IMAGE_THEME
+  });
 }
 
 function attachHotelGallery(hotel, destination) {
@@ -106,12 +101,12 @@ function attachHotelGallery(hotel, destination) {
     ...(Array.isArray(hotel.images) ? hotel.images : []),
     hotel.image || ''
   ]);
-  const gallery = buildHotelGallery(destination, hotel.name, category, providerImages);
+  const image = buildHotelImage(destination, hotel.name, category, providerImages);
   return {
     ...hotel,
     category,
-    image: gallery[0] || null,
-    images: gallery
+    image: image || null,
+    images: image ? [image] : []
   };
 }
 
